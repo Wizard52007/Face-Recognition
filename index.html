@@ -756,20 +756,7 @@
             document.body.requestPointerLock(); // Relock the mouse to the game!
         });
 
-        // 2. The Web Dev Escape Hatch
-        document.getElementById('faulty-brick-escape-btn').addEventListener('click', () => {
-            // ... (keep your existing escape hatch logic here) ...
-            document.getElementById('letter-overlay').style.display = 'none';
-            camera.clear(); 
-            activeWand = null; 
-            currentRoom++;
-            if (currentRoom > 1) {
-                alert("You finished the game! Happy Birthday!");
-            } else {
-                document.body.requestPointerLock(); 
-                loadRoom(currentRoom);
-            }
-        });
+       
 
         // ==========================================
         // THE JAVASCRIPT CONSOLE HACK
