@@ -90,15 +90,7 @@
         <p style="font-size: 18px; line-height: 1.5;">Now as you already learnt web development (I hope so), test your knowledge and find which brick is faulty in the room.</p>
         <p style="font-size: 14px; font-style: italic; color: #666; margin-top: 20px; margin-bottom: 20px;">(Hint: You might need developer tools to escape this dimension...)</p>
 
-  <div id="password-overlay" style="display: none; position: fixed !important; top: 50% !important; left: 50% !important; transform: translate(-50%, -50%) !important; background: rgba(10, 10, 20, 0.95) !important; padding: 40px !important; border: 2px solid #ffaa00 !important; z-index: 2147483647 !important; color: white !important;">
-        <h2 style="font-family: 'Times New Roman', serif; margin-top: 0; margin-bottom: 10px;">Speak the Password</h2>
-        
-        <div id="magic-echo" style="min-height: 40px; font-size: 32px; letter-spacing: 4px; color: #00ffff; text-shadow: 0 0 15px #00ffff; margin-bottom: 20px; font-family: monospace;"></div>
-
-        <input type="text" id="magic-password" placeholder="Start typing..." autocomplete="off" style="background: rgba(0,0,0,0.8); border: 1px solid #ffaa00; color: #ffffff; padding: 10px; font-size: 16px; text-align: center; outline: none; width: 80%; margin-bottom: 20px; box-shadow: inset 0 0 10px rgba(255, 170, 0, 0.2);">
-        <br>
-        <button id="submit-password" style="padding: 10px 30px; font-size: 18px; background-color: #ffaa00; color: #000; border: none; cursor: pointer; font-weight: bold; border-radius: 5px; text-transform: uppercase;">Cast Spell</button>
-    </div>
+  
         
         <button id="close-letter-btn" style="padding: 10px 20px; font-size: 16px; cursor: pointer; background-color: #333; color: white; border: none; border-radius: 3px;">Accept Challenge</button>
     </div>
@@ -912,5 +904,16 @@
 
        
     </script>
+    <div id="password-overlay" style="display: none; position: fixed; top: 50%; left: 50%; transform: translate(-50%, -50%); min-width: 400px; min-height: 250px; background: rgba(10, 10, 20, 0.95); padding: 40px; border: 2px solid #ffaa00; border-radius: 10px; color: #ffaa00; text-align: center; z-index: 2147483647; box-shadow: 0 0 50px rgba(255, 170, 0, 0.8); pointer-events: auto;">
+        
+        <h2 style="font-family: 'Times New Roman', serif; margin-top: 0; margin-bottom: 10px;">Speak the Password</h2>
+        
+        <div id="magic-echo" style="min-height: 40px; font-size: 32px; letter-spacing: 4px; color: #00ffff; text-shadow: 0 0 15px #00ffff; margin-bottom: 20px; font-family: monospace;"></div>
+
+        <input type="text" id="magic-password" placeholder="Start typing..." autocomplete="off" style="background: rgba(0,0,0,0.8); border: 1px solid #ffaa00; color: #ffffff; padding: 10px; font-size: 16px; text-align: center; outline: none; width: 80%; margin-bottom: 20px; box-shadow: inset 0 0 10px rgba(255, 170, 0, 0.2);">
+        <br>
+        
+        <button id="submit-password" style="padding: 10px 30px; font-size: 18px; background-color: #ffaa00; color: #000; border: none; cursor: pointer; font-weight: bold; border-radius: 5px; text-transform: uppercase;">Cast Spell</button>
+    </div>
 </body>
 </html>
