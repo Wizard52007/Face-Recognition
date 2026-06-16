@@ -682,21 +682,61 @@
                     activeWand = equippedWand;
                     scene.remove(clickedPart.parent);
 
-                    // FIX 2: SPAWN A MUCH BIGGER FLYING ORB
-                    const orbGeo = new THREE.SphereGeometry(0.8, 16, 16); // Increased from 0.3 to 0.8
-                    const orbMat = new THREE.MeshStandardMaterial({ color: 0x0088ff, emissive: 0x0088ff, emissiveIntensity: 2 });
-                    const orb = new THREE.Mesh(orbGeo, orbMat);
-                    orb.position.set(0, 3, -5); 
-                    
-                    const orbLight = new THREE.PointLight(0x00aaff, 5, 10);
-                    orb.add(orbLight);
-                    orb.userData = { isOrb: true };
-                    
-                    scene.add(orb);
-                    window.patronusOrb = orb; 
-                    
-                    interactableObjects = [orb]; 
-                    document.getElementById('instructions').innerHTML = "<em>The wand is yours! Shoot the flying Patronus orb!</em>";
+                // FIX 2: SPAWN THE GOLDEN SNITCH
+                    const snitchGroup = new THREE.Group();
+                    snitchGroup.position.set(0, 3, -5);
+
+                    // 1. The Golden Body
+                    const bodyGeo = new THREE.SphereGeometry(0.5, 16, 16);
+                    const bodyMat = new THREE.MeshStandardMaterial({ 
+                        color: 0xffaa00, // Golden yellow
+                        metalness: 1.0,  // Make it shiny
+                        roughness: 0.3,
+                        emissive: 0xaa7700,
+                        emissiveIntensity: 0.5
+                    });
+                    const snitchBody = new THREE.Mesh(bodyGeo, bodyMat);
+                    snitchBody.userData = { isOrb: true }; // Make body shootable
+                    snitchGroup.add(snitchBody);
+
+                    // 2. The Fluttering Wings
+                    const wingGeo = new THREE.PlaneGeometry(1.5, 0.4);
+                    // Shift the pivot point so they flap from the base, not the center!
+                    wingGeo.translate(0.75, 0, 0); 
+                    const wingMat = new THREE.MeshStandardMaterial({ 
+                        color: 0xffffff, 
+                        transparent: true, 
+                        opacity: 0.6, 
+                        side: THREE.DoubleSide // Visible from both sides
+                    });
+
+                    // Right Wing
+                    const rightWing = new THREE.Mesh(wingGeo, wingMat);
+                    rightWing.position.set(0.4, 0, 0); 
+                    rightWing.userData = { isOrb: true }; // Make wing shootable
+                    snitchGroup.add(rightWing);
+
+                    // Left Wing
+                    const leftWing = new THREE.Mesh(wingGeo, wingMat);
+                    leftWing.position.set(-0.4, 0, 0); 
+                    leftWing.rotation.y = Math.PI; // Flip it outward
+                    leftWing.userData = { isOrb: true }; // Make wing shootable
+                    snitchGroup.add(leftWing);
+
+                    // Add a tiny golden glow around it
+                    const snitchLight = new THREE.PointLight(0xffaa00, 3, 8);
+                    snitchGroup.add(snitchLight);
+
+                    scene.add(snitchGroup);
+
+                    // Store them globally so we can animate them
+                    window.patronusOrb = snitchGroup; 
+                    window.rightWing = rightWing;
+                    window.leftWing = leftWing;
+
+                    // If she shoots the body OR either wing, she wins!
+                    interactableObjects = [snitchBody, rightWing, leftWing]; 
+                    document.getElementById('instructions').innerHTML = "<em>The wand is yours! Catch the Golden Snitch!</em>";
 
                 } else if (clickedPart.userData.message) {
                     alert(clickedPart.userData.message);
@@ -732,6 +772,20 @@
         // --- MAIN GAME LOOP ---
         function animate() {
             requestAnimationFrame(animate);
+
+            // --- ANIMATE THE GOLDEN SNITCH ---
+            if (window.patronusOrb && window.rightWing && window.leftWing) {
+                const time = Date.now() * 0.005; // Speed of the magic
+                
+                // 1. Make the Snitch bob up and down and weave side to side
+                window.patronusOrb.position.y = 3 + Math.sin(time * 0.4) * 0.8;
+                window.patronusOrb.position.x = Math.cos(time * 0.3) * 2;
+                
+                // 2. Flap the wings furiously!
+                const flapAngle = Math.sin(time * 8) * 0.6; // High speed sine wave
+                window.rightWing.rotation.z = flapAngle;
+                window.leftWing.rotation.z = flapAngle; 
+            }
 
             // 1. WASD Physics
             if (controls.isLocked === true) {
@@ -854,7 +908,7 @@
             const guess = document.getElementById('magic-password').value.toLowerCase().trim();
             
             // 🛑 SANKET: Put your secret answer here (in all lowercase) 🛑
-            const secretPassword = "19-02-2025";
+            const secretPassword = "19-02-2026";
 
             if (guess === secretPassword) {
                 // SUCCESS! 
