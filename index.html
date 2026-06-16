@@ -321,7 +321,19 @@
             }
             interactableObjects = [];
         }
-
+        
+        function loadProp(path, x, y, z, scale, rotation = 0) {
+    const loader = new THREE.GLTFLoader();
+    loader.load(path, function (gltf) {
+        const model = gltf.scene;
+        model.scale.set(scale, scale, scale);
+        model.position.set(x, y, z);
+        model.rotation.y = rotation;
+        scene.add(model);
+    }, undefined, function (error) {
+        console.error("Error loading " + path + ":", error);
+    });
+}
         function loadRoom(roomIndex) {
             clearScene();
             
@@ -338,14 +350,21 @@
         if (roomIndex === 0) {
                 // --- ROOM 0: GRYFFINDOR / GREAT HALL VIBE ---
                 scene.background = new THREE.Color(0x020205); // Pitch black night sky for the ceiling
+
+                // --- LOAD YOUR PROPS ---
+                // Path, X, Y, Z, Scale, Rotation(Radians)
+                loadProp('uniform.glb', -4, 0, -5, 3, 0);      // Uniform on the left
+                loadProp('phonebooth.glb', 6, 10, -6, 0.05, -0.5); // Booth in corner
+                loadProp('car.glb', 0, 0, 8, 0.8, Math.PI);      // Car behind the player
+                loadProp('suitcase.glb', 4, 0.1, -4, 0.05, 0.2);  // Suitcase near the Snitch
                 
                 // 1. WARM, COZY LIGHTING
                 scene.fog = new THREE.FogExp2(0x050300, 0.04); // Warm dark fog
                 
-                const ambientLight = new THREE.AmbientLight(0x403020); // Firelight base
+                const ambientLight = new THREE.AmbientLight(0x100a05); // Firelight base
                 scene.add(ambientLight);
 
-                const centerLight = new THREE.PointLight(0xffa500, 2.5, 25); // Bright orange/yellow glow
+                const centerLight = new THREE.PointLight(0xffa500, 0.8, 25); // Bright orange/yellow glow
                 centerLight.position.set(0, 3, -5);
                 scene.add(centerLight);
 
@@ -383,30 +402,31 @@
 
                 // --- 2. TEXT GENERATOR FUNCTION ---
                 // This converts standard text into a glowing 3D texture
-                window.createWallWriting = function(riddleText) {
+                    window.createWallWriting = function(riddleText) {
                     const canvas = document.createElement('canvas');
                     canvas.width = 1024;
                     canvas.height = 512;
                     const ctx = canvas.getContext('2d');
                     
-                    ctx.font = '40px "Times New Roman"';
-                    ctx.fillStyle = '#ffaa00'; // Glowing magic gold
+                    ctx.font = '35px "Times New Roman"';
+                    ctx.fillStyle = '#ffaa00';
                     ctx.textAlign = 'center';
                     
-                    // The Riddle!
-                    ctx.fillText(riddleText, 512, 200);
+                    // Split the text by a comma (e.g., "Line 1, Line 2")
+                    const lines = riddleText.split(',');
+                    lines.forEach((line, index) => {
+                        ctx.fillText(line, 512, 150 + (index * 50));
+                    });
+                    
                     ctx.fillText("[ CLICK HERE TO ANSWER ]", 512, 350);
 
                     const texture = new THREE.CanvasTexture(canvas);
                     const geo = new THREE.PlaneGeometry(8, 4);
-                    // AdditiveBlending makes the black background invisible and the text glow
                     const mat = new THREE.MeshBasicMaterial({ map: texture, transparent: true, blending: THREE.AdditiveBlending });
                     
                     const textMesh = new THREE.Mesh(geo, mat);
-                    // Place it on the wall opposite of the brick (Z is positive 9.9)
                     textMesh.position.set(0, 4, 9.9); 
-                    textMesh.rotation.y = Math.PI; // Spin it so it faces the center of the room
-                    
+                    textMesh.rotation.y = Math.PI; 
                     return textMesh;
                 };
 
@@ -631,7 +651,7 @@
                             // Spawn the glowing riddle on the opposite wall
                             if (!window.wallWriting) {
                                 // SANKET: Put your custom question/riddle here!
-                                window.wallWriting = window.createWallWriting("Umm..Since this is the first question, I will let you off the hook... When did this chapter began...?? (answer in dd-mm-yyyy)");
+                                window.wallWriting = window.createWallWriting("Umm... Since this is the first question, I will let you off the hook... , Soooo.... When did this chapter began...?? , (answer in dd-mm-yyyy)");
                                 window.wallWriting.userData = { isRiddle: true };
                                 scene.add(window.wallWriting);
                             }
@@ -678,7 +698,7 @@
                     equippedWand.position.set(-0.8, -0.7, -1.2); 
                     equippedWand.rotation.set(-Math.PI / 2.5, 0.3, 0.2); 
                     
-                    const lumosLight = new THREE.PointLight(0xffffff, 10, 30);
+                    const lumosLight = new THREE.PointLight(0xffffff, 1.5, 15);
                     lumosLight.position.set(0, 0.6, 0); 
                     equippedWand.add(lumosLight);
                     camera.add(equippedWand);
@@ -687,7 +707,7 @@
 
 // FIX 2: LOAD THE REAL 3D GOLDEN SNITCH
                     const snitchGroup = new THREE.Group();
-                    snitchGroup.position.set(0, 3, -5);
+                    snitchGroup.position.set(0, 3, 0);
 
                     // 1. Load the actual .glb file
                     const loader = new THREE.GLTFLoader();
@@ -696,13 +716,16 @@
                         
                         // You will likely need to shrink the model drastically!
                         // Adjust these numbers if the snitch is too huge or too tiny
-                        realSnitch.scale.set(0.05, 0.05, 0.05); 
+                        realSnitch.scale.set(0.002, 0.002, 0.002); 
                         
                         // Optional: Make it shiny if the model materials are dull
                         realSnitch.traverse((child) => {
                             if (child.isMesh) {
-                                child.material.metalness = 1;
-                                child.material.roughness = 0.2;
+                                child.material.metalness = 1.0;
+                                child.material.roughness = 0.1;
+
+                                child.material.emissive = new THREE.Color(0xffaa00);
+                                child.material.emissiveIntensity = 0.3; // Adds that "shimmer" effect
                             }
                         });
 
@@ -722,7 +745,7 @@
                     snitchGroup.add(snitchHitbox);
 
                     // Add a spotlight so it gleams in the dark room
-                    const snitchLight = new THREE.PointLight(0xffd700, 2, 4);
+                    const snitchLight = new THREE.PointLight(0xffd700, 0.5, 3);
                     snitchGroup.add(snitchLight);
 
                     scene.add(snitchGroup);
@@ -773,9 +796,9 @@
                 const time = Date.now() * 0.005;
                 
                 // Bob and weave rapidly
-                window.patronusOrb.position.y = 3 + Math.sin(time * 0.6) * 1.2;
-                window.patronusOrb.position.x = Math.cos(time * 0.4) * 2.5;
-                window.patronusOrb.position.z = -5 + Math.sin(time * 0.5) * 1.5;
+                window.patronusOrb.position.y = 3 + Math.sin(time * 0.6) * 2.0;
+                window.patronusOrb.position.x = Math.cos(time * 0.4) * 6.0;
+                window.patronusOrb.position.z = Math.sin(time * 0.5) * 4.0;
                 
                 // Spin and tumble through the air
                 if (window.realSnitchModel) {
