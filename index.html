@@ -353,10 +353,10 @@
 
                 // --- LOAD YOUR PROPS ---
                 // Path, X, Y, Z, Scale, Rotation(Radians)
-                loadProp('uniform.glb', -4, 0, -5, 3, 0);      // Uniform on the left
-                loadProp('phonebooth.glb', 6, 10, -6, 0.05, -0.5); // Booth in corner
-                loadProp('car.glb', 0, 0, 8, 0.8, Math.PI);      // Car behind the player
-                loadProp('suitcase.glb', 4, 0.1, -4, 0.05, 0.2);  // Suitcase near the Snitch
+                loadProp('uniform.glb', -6, 0, -6, 3, 0);      // Uniform on the left
+                loadProp('phonebooth.glb', 8, 3.8, 7, 0.15, 0.03); // Booth in corner
+                loadProp('car.glb', 0, 3.2, 0, 2.0, Math.PI - (Math.PI / 4));      // Car behind the player
+                loadProp('suitcase.glb', 6, 0.1, -6, 0.05, 0.2);  // Suitcase near the Snitch
                 
                 // 1. WARM, COZY LIGHTING
                 scene.fog = new THREE.FogExp2(0x050300, 0.04); // Warm dark fog
