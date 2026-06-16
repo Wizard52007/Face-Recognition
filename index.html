@@ -89,6 +89,16 @@
         <p style="font-size: 18px; line-height: 1.5;">Congrats on catching the orb, you proved that you are not lazy like a panda 👽</p>
         <p style="font-size: 18px; line-height: 1.5;">Now as you already learnt web development (I hope so), test your knowledge and find which brick is faulty in the room.</p>
         <p style="font-size: 14px; font-style: italic; color: #666; margin-top: 20px; margin-bottom: 20px;">(Hint: You might need developer tools to escape this dimension...)</p>
+
+  <div id="password-overlay" style="display: none; position: absolute; top: 50%; left: 50%; transform: translate(-50%, -50%); background: rgba(10, 10, 20, 0.95); padding: 40px; border: 2px solid #ffaa00; border-radius: 10px; color: #ffaa00; text-align: center; z-index: 9999; box-shadow: 0 0 30px rgba(255, 170, 0, 0.4); pointer-events: auto;">
+        <h2 style="font-family: 'Times New Roman', serif; margin-top: 0; margin-bottom: 10px;">Speak the Password</h2>
+        
+        <div id="magic-echo" style="min-height: 40px; font-size: 32px; letter-spacing: 4px; color: #00ffff; text-shadow: 0 0 15px #00ffff; margin-bottom: 20px; font-family: monospace;"></div>
+
+        <input type="text" id="magic-password" placeholder="Start typing..." autocomplete="off" style="background: rgba(0,0,0,0.8); border: 1px solid #ffaa00; color: #ffffff; padding: 10px; font-size: 16px; text-align: center; outline: none; width: 80%; margin-bottom: 20px; box-shadow: inset 0 0 10px rgba(255, 170, 0, 0.2);">
+        <br>
+        <button id="submit-password" style="padding: 10px 30px; font-size: 18px; background-color: #ffaa00; color: #000; border: none; cursor: pointer; font-weight: bold; border-radius: 5px; text-transform: uppercase;">Cast Spell</button>
+    </div>
         
         <button id="close-letter-btn" style="padding: 10px 20px; font-size: 16px; cursor: pointer; background-color: #333; color: white; border: none; border-radius: 3px;">Accept Challenge</button>
     </div>
@@ -360,26 +370,50 @@
                 });
                 buildRoomGeometry(floorGeo, wallGeo, castleMaterial);
 
-                // --- THE FAULTY 3D BRICK ---
-                const brickGeo = new THREE.PlaneGeometry(1.5, 0.5); // Roughly the size of one brick
-                
-                // Give it a slightly darker, "corrupted" color so it stands out if she looks closely
+// --- 1. THE STEALTH BRICK ---
+                // We use BoxGeometry so it physically sticks out of the wall
+                const brickGeo = new THREE.BoxGeometry(1.5, 0.5, 0.2); 
                 const brickMat = new THREE.MeshStandardMaterial({ 
-                    color: 0x2a1a1a, 
-                    roughness: 0.1, // Make it slightly shiny/weird compared to the rough wall
-                    metalness: 0.5 
+                    map: wallTexture, // Use the EXACT same texture so it blends perfectly!
+                    roughness: 0.9 
                 });
                 
                 const faultyBrick = new THREE.Mesh(brickGeo, brickMat);
-                
-                // Position it on the back wall, slightly offset, just barely floating in front of the wall texture
-                faultyBrick.position.set(3, 2, -9.9); 
+                // Hide it down in the dark bottom-left corner of the room
+                faultyBrick.position.set(-8, 0.5, -9.9); 
                 faultyBrick.userData = { isFaultyBrick: true };
                 
                 scene.add(faultyBrick);
-                
-                // Save it globally so we can make it interactable ONLY after the orb is caught
-                window.secretBrick = faultyBrick;
+                window.secretBrick = faultyBrick; 
+
+                // --- 2. TEXT GENERATOR FUNCTION ---
+                // This converts standard text into a glowing 3D texture
+                window.createWallWriting = function(riddleText) {
+                    const canvas = document.createElement('canvas');
+                    canvas.width = 1024;
+                    canvas.height = 512;
+                    const ctx = canvas.getContext('2d');
+                    
+                    ctx.font = '40px "Times New Roman"';
+                    ctx.fillStyle = '#ffaa00'; // Glowing magic gold
+                    ctx.textAlign = 'center';
+                    
+                    // The Riddle!
+                    ctx.fillText(riddleText, 512, 200);
+                    ctx.fillText("[ CLICK HERE TO ANSWER ]", 512, 350);
+
+                    const texture = new THREE.CanvasTexture(canvas);
+                    const geo = new THREE.PlaneGeometry(8, 4);
+                    // AdditiveBlending makes the black background invisible and the text glow
+                    const mat = new THREE.MeshBasicMaterial({ map: texture, transparent: true, blending: THREE.AdditiveBlending });
+                    
+                    const textMesh = new THREE.Mesh(geo, mat);
+                    // Place it on the wall opposite of the brick (Z is positive 9.9)
+                    textMesh.position.set(0, 4, 9.9); 
+                    textMesh.rotation.y = Math.PI; // Spin it so it faces the center of the room
+                    
+                    return textMesh;
+                };
 
                 // 3. THE ENCHANTED CEILING (Moving Stars)
                 const starsGeo = new THREE.BufferGeometry();
@@ -564,18 +598,22 @@
         let isCasting = false;
         let castAnimationTimer = 0;
 
-       function onMouseClick() {
+        function onMouseClick() {
             if (!controls.isLocked) return;
 
-// ==========================================
+            // FIX 1: Always shoot exactly from the center crosshair!
+            const centerCrosshair = new THREE.Vector2(0, 0);
+
+            // ==========================================
             // IF HOLDING WAND: EVERY CLICK IS A SPELL
             // ==========================================
             if (activeWand) {
+                // Only cast if the previous animation is finished
                 if (!isCasting) {
                     isCasting = true;
                     castAnimationTimer = 0; 
 
-                    raycaster.setFromCamera(mouse, camera);
+                    raycaster.setFromCamera(centerCrosshair, camera);
                     const intersects = raycaster.intersectObjects(interactableObjects);
 
                     if (intersects.length > 0) {
@@ -583,32 +621,55 @@
 
                         // SCENARIO A: SHE SHOT THE ORB
                         if (hitObject.userData.isOrb) {
-                            document.getElementById('instructions').innerHTML = "<em>You caught it! Read the letter... (Press ESC to unlock your mouse)</em>";
+                            document.getElementById('instructions').innerHTML = "<em>You caught it! Turn around and find the protruding brick.</em>";
                             
                             scene.remove(hitObject);
                             window.patronusOrb = null;
                             
-                            // Make the wall brick interactable now!
+                            // Make the stealth brick shootable now!
                             interactableObjects = [window.secretBrick]; 
-                            
-                            document.getElementById('letter-overlay').style.display = 'block';
 
-                        // SCENARIO B: SHE SHOT THE FAULTY BRICK
+                        // SCENARIO B: SHE SHOT THE STEALTH BRICK
                         } else if (hitObject.userData.isFaultyBrick) {
-                            document.getElementById('instructions').innerHTML = "<span style='color: #ff3333;'>FIREWALL ACTIVE: Console override required. Press F12.</span>";
+                            document.getElementById('instructions').innerHTML = "<em>A magical hum echoes... turn around!</em>";
+                            
+                            // Spawn the glowing riddle on the opposite wall
+                            if (!window.wallWriting) {
+                                // SANKET: Put your custom question/riddle here!
+                                window.wallWriting = window.createWallWriting("Umm..Since this is the first question, I will let you off the hook... When did this chapter began...?? (answer in dd-mm-yyyy)");
+                                window.wallWriting.userData = { isRiddle: true };
+                                scene.add(window.wallWriting);
+                            }
+                            
+                            // Make only the glowing text clickable now
+                            interactableObjects = [window.wallWriting];
+
+                       // SCENARIO C: SHE CLICKED THE GLOWING TEXT
+                        } else if (hitObject.userData.isRiddle) {
+                            
+                            // 1. Tell the browser to unlock the mouse
+                            document.exitPointerLock(); 
+                            
+                            // 2. Show the typing UI
+                            document.getElementById('password-overlay').style.display = 'block';
+                            
+                            // 3. Wait 100ms for the unlock to finish, THEN force the typing cursor
+                            setTimeout(() => {
+                                document.getElementById('magic-password').focus(); 
+                            }, 100);
                         }
                     } else {
-                        // SCENARIO C: SHE MISSED
+                        // SCENARIO D: SHE MISSED
                         document.getElementById('instructions').innerHTML = "<em>Sparks fly! Keep looking...</em>";
                     }
                 }
-                return;
+                return; // Stop running code here
             }
 
             // ==========================================
-            // IF HAND IS EMPTY: TRY TO PICK UP ITEMS
+            // IF HAND IS EMPTY: TRY TO PICK UP WAND
             // ==========================================
-            raycaster.setFromCamera(mouse, camera);
+            raycaster.setFromCamera(centerCrosshair, camera);
             const intersects = raycaster.intersectObjects(interactableObjects);
 
             if (intersects.length > 0) {
@@ -629,18 +690,18 @@
                     activeWand = equippedWand;
                     scene.remove(clickedPart.parent);
 
-                    // --- NEW: SPAWN THE FLYING ORB INSTEAD OF THE PORTAL ---
-                    const orbGeo = new THREE.SphereGeometry(0.3, 16, 16);
+                    // FIX 2: SPAWN A MUCH BIGGER FLYING ORB
+                    const orbGeo = new THREE.SphereGeometry(0.8, 16, 16); // Increased from 0.3 to 0.8
                     const orbMat = new THREE.MeshStandardMaterial({ color: 0x0088ff, emissive: 0x0088ff, emissiveIntensity: 2 });
                     const orb = new THREE.Mesh(orbGeo, orbMat);
-                    orb.position.set(0, 3, -5); // Start position
+                    orb.position.set(0, 3, -5); 
                     
                     const orbLight = new THREE.PointLight(0x00aaff, 5, 10);
                     orb.add(orbLight);
                     orb.userData = { isOrb: true };
                     
                     scene.add(orb);
-                    window.patronusOrb = orb; // Save globally so we can animate it
+                    window.patronusOrb = orb; 
                     
                     interactableObjects = [orb]; 
                     document.getElementById('instructions').innerHTML = "<em>The wand is yours! Shoot the flying Patronus orb!</em>";
@@ -652,7 +713,12 @@
         }
 
         // --- WASD MOVEMENT ---
+
+        
         function onKeyDown(event) {
+
+            if (document.activeElement.id === 'magic-password') return;
+
             switch (event.code) {
                 case 'KeyW': moveState.forward = true; break;
                 case 'KeyA': moveState.left = true; break;
@@ -662,6 +728,7 @@
         }
 
         function onKeyUp(event) {
+            if (document.activeElement.id === 'magic-password') return;
             switch (event.code) {
                 case 'KeyW': moveState.forward = false; break;
                 case 'KeyA': moveState.left = false; break;
@@ -786,6 +853,62 @@
 
         // Give her a hint in the console when the page loads
         console.log("%c🔒 System Secure. Waiting for manual override...", "color: #ffaa00; font-size: 14px;");
+
+        // ==========================================
+        // THE PASSWORD CHECKER
+        // ==========================================
+        document.getElementById('submit-password').addEventListener('click', () => {
+            // Get what she typed, make it lowercase, and remove extra spaces
+            const guess = document.getElementById('magic-password').value.toLowerCase().trim();
+            
+            // 🛑 SANKET: Put your secret answer here (in all lowercase) 🛑
+            const secretPassword = "19-02-2025";
+
+            if (guess === secretPassword) {
+                // SUCCESS! 
+                document.getElementById('password-overlay').style.display = 'none';
+                
+                // Teleport
+                if (typeof camera !== 'undefined') camera.clear(); 
+                activeWand = null; 
+                currentRoom++;
+                if (currentRoom > 1) {
+                    alert("You finished the game! Happy Birthday!");
+                } else {
+                    document.body.requestPointerLock(); 
+                    loadRoom(currentRoom);
+                }
+                } else {
+                // FAILED!
+                document.getElementById('instructions').innerHTML = "<em style='color: red;'>The magic fizzles. Incorrect password!</em>";
+                
+                // Clear both the input box AND the neon echo
+                document.getElementById('magic-password').value = "";
+                document.getElementById('magic-echo').innerText = ""; 
+                
+                document.getElementById('password-overlay').style.display = 'none';
+                document.body.requestPointerLock(); 
+            }
+        });
+        
+        // Bonus: Let her press "Enter" to submit the password instead of just clicking the button
+        document.getElementById('magic-password').addEventListener('keypress', function (e) {
+            if (e.key === 'Enter') {
+                document.getElementById('submit-password').click();
+            }
+        });
+        // Prevent clicks inside the password box from accidentally casting spells or locking the screen
+        document.getElementById('password-overlay').addEventListener('click', (event) => {
+            event.stopPropagation();
+        });
+
+        // ==========================================
+        // THE MAGICAL ECHO (Visual Feedback for Typing)
+        // ==========================================
+        document.getElementById('magic-password').addEventListener('input', (event) => {
+            // Every time a key is pressed, mirror it to the giant glowing text!
+            document.getElementById('magic-echo').innerText = event.target.value;
+        });
 
        
     </script>
