@@ -1,0 +1,806 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Project</title>
+    <style>
+        body {
+            margin: 0;
+            overflow: hidden;
+            background-color: #000;
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            color: white;
+        }
+
+        /* UI Overlays */
+        #ui-layer {
+            position: absolute;
+            top: 0;
+            left: 0;
+            width: 100vw;
+            height: 100vh;
+            display: flex;
+            flex-direction: column;
+            justify-content: center;
+            align-items: center;
+            z-index: 10;
+            background: linear-gradient(135deg, #1a1a2e, #16213e);
+            transition: opacity 1s ease;
+        }
+
+        #face-scanner {
+            text-align: center;
+            background: rgba(0, 0, 0, 0.5);
+            padding: 40px;
+            border-radius: 15px;
+            box-shadow: 0 0 20px rgba(0,255,255,0.2);
+        }
+
+        #webcam {
+            width: 320px;
+            height: 240px;
+            background-color: #333;
+            border: 3px solid #4CAF50;
+            border-radius: 10px;
+            margin-bottom: 20px;
+        }
+
+        .btn {
+            background-color: #4CAF50;
+            border: none;
+            color: white;
+            padding: 10px 20px;
+            text-align: center;
+            font-size: 16px;
+            cursor: pointer;
+            border-radius: 5px;
+            margin-top: 10px;
+        }
+
+        /* 3D Crosshair and Instructions */
+        #crosshair {
+            position: absolute;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%);
+            font-size: 24px;
+            color: rgba(255, 255, 255, 0.7);
+            display: none;
+            z-index: 5;
+            pointer-events: none;
+        }
+
+        #instructions {
+            position: absolute;
+            bottom: 20px;
+            text-align: center;
+            width: 100%;
+            display: none;
+            z-index: 5;
+            pointer-events: none;
+            font-size: 18px;
+            text-shadow: 2px 2px 4px #000;
+        }
+    </style>
+
+  <div id="letter-overlay" style="display: none; position: absolute; top: 50%; left: 50%; transform: translate(-50%, -50%); background: #f4e8c1; padding: 30px; border-radius: 5px; color: #333; font-family: 'Times New Roman', serif; text-align: center; max-width: 450px; box-shadow: 0 0 20px rgba(255,255,255,0.5); z-index: 9999;">
+        <h2 style="margin-top: 0; border-bottom: 2px solid #333; padding-bottom: 10px;">A Message Appears...</h2>
+        <p style="font-size: 18px; line-height: 1.5;">Congrats on catching the orb, you proved that you are not lazy like a panda 👽</p>
+        <p style="font-size: 18px; line-height: 1.5;">Now as you already learnt web development (I hope so), test your knowledge and find which brick is faulty in the room.</p>
+        <p style="font-size: 14px; font-style: italic; color: #666; margin-top: 20px; margin-bottom: 20px;">(Hint: You might need developer tools to escape this dimension...)</p>
+        
+        <button id="close-letter-btn" style="padding: 10px 20px; font-size: 16px; cursor: pointer; background-color: #333; color: white; border: none; border-radius: 3px;">Accept Challenge</button>
+    </div>
+
+    
+
+    <script type="importmap">
+        {
+            "imports": {
+                "three": "https://unpkg.com/three@0.160.0/build/three.module.js",
+                "three/addons/": "https://unpkg.com/three@0.160.0/examples/jsm/"
+            }
+        }
+    </script>
+    
+   <script defer src="https://cdn.jsdelivr.net/npm/@vladmandic/face-api/dist/face-api.min.js"></script>
+</head>
+<body>
+
+    <div id="ui-layer">
+        <div id="face-scanner">
+            <h1>Security Verification</h1>
+            <video id="webcam" autoplay muted width="320" height="240"></video>
+            <p id="scan-status">Awaiting camera feed...</p>
+            <button class="btn" id="bypass-btn">Bypass Scanner (Dev Mode)</button>
+        </div>
+    </div>
+
+    <div id="crosshair">+</div>
+    <div id="instructions">Click screen to look around.<br/>Use W, A, S, D to move. Click objects to interact.</div>
+
+    <script type="module">
+        import * as THREE from 'three';
+        import { PointerLockControls } from 'three/addons/controls/PointerLockControls.js';
+
+        // ==========================================
+        // 1. GLOBAL STATE & HTML ELEMENTS
+        // ==========================================
+        let camera, scene, renderer, controls, particles;
+        let raycaster, mouse;
+        let interactableObjects = []; // Objects the user can click
+        let currentRoom = 0; // 0 = HP, 1 = K-Pop
+
+        // Movement state
+        const moveState = { forward: false, backward: false, left: false, right: false };
+        const velocity = new THREE.Vector3();
+        const direction = new THREE.Vector3();
+        let prevTime = performance.now();
+
+        const uiLayer = document.getElementById('ui-layer');
+        const crosshair = document.getElementById('crosshair');
+        const instructions = document.getElementById('instructions');
+        const bypassBtn = document.getElementById('bypass-btn');
+
+// ==========================================
+        // 2. THE GATEWAY (MODERN FACE API VIA CDN)
+        // ==========================================
+        let faceMatcher;
+
+        async function initFaceAPI() {
+            const statusText = document.getElementById('scan-status');
+            const MODEL_URL = 'https://cdn.jsdelivr.net/npm/@vladmandic/face-api/model/';
+            
+            try {
+                statusText.innerText = "Initializing Security Protocols...";
+                
+                // 1. Load the pristine AI models from the cloud
+                await Promise.all([
+                    faceapi.nets.ssdMobilenetv1.loadFromUri(MODEL_URL),
+                    faceapi.nets.faceLandmark68Net.loadFromUri(MODEL_URL),
+                    faceapi.nets.faceRecognitionNet.loadFromUri(MODEL_URL)
+                ]);
+
+                // 2. Define your reference images (Make sure these are in your folder!)
+                const labels = ['someone-1.jpg', 'someone-2.jpg', 'someone-3.jpg'];
+                const descriptions = [];
+
+                statusText.innerText = "Analyzing reference database...";
+
+                // 3. Extract facial features from the photos
+                for (const imageName of labels) {
+                    try {
+                        const img = document.createElement('img');
+                        img.src = `./${imageName}`;
+                        
+                        await new Promise((resolve, reject) => {
+                            img.onload = resolve;
+                            img.onerror = () => reject(`File missing or unreadable: ${imageName}`);
+                        });
+
+                        // Using the robust SSD engine to read the photos
+                        const detection = await faceapi.detectSingleFace(img, new faceapi.SsdMobilenetv1Options())
+                            .withFaceLandmarks()
+                            .withFaceDescriptor();
+                        
+                        if (detection) {
+                            descriptions.push(detection.descriptor);
+                            console.log(`✅ Profile loaded: ${imageName}`);
+                        } else {
+                            console.warn(`⚠️ No face detected in ${imageName}. Try a clearer photo.`);
+                        }
+                    } catch (err) {
+                        console.error(err);
+                    }
+                }
+
+                if (descriptions.length === 0) {
+                    statusText.innerText = "Error: Database empty. Check console for missing photos.";
+                    return;
+                }
+
+                // 4. Create the AI Matcher (0.50 = stricter match requirement)
+                const labeledDescriptors = new faceapi.LabeledFaceDescriptors('Special Someone', descriptions);
+                faceMatcher = new faceapi.FaceMatcher(labeledDescriptors, 0.50);
+
+                statusText.innerText = "Starting Biometric Scanner...";
+                setupWebcam();
+
+            } catch (err) {
+                console.error("Initialization error:", err);
+                statusText.innerText = "System Failure. Check Console.";
+            }
+        }
+
+        async function setupWebcam() {
+            const video = document.getElementById('webcam');
+            try {
+                const stream = await navigator.mediaDevices.getUserMedia({ video: true });
+                video.srcObject = stream;
+                
+                video.addEventListener('play', () => {
+                    document.getElementById('scan-status').innerText = "Look at the camera to verify identity.";
+                    scanContinuously(video);
+                });
+            } catch (err) {
+                document.getElementById('scan-status').innerText = "Camera access denied.";
+            }
+        }
+
+        async function scanContinuously(video) {
+            const scanInterval = setInterval(async () => {
+                if (!faceMatcher) return;
+
+                try {
+                    // Using the robust SSD engine for the live feed
+                    const detection = await faceapi.detectSingleFace(video, new faceapi.SsdMobilenetv1Options())
+                        .withFaceLandmarks()
+                        .withFaceDescriptor();
+
+                    if (detection) {
+                        const bestMatch = faceMatcher.findBestMatch(detection.descriptor);
+                        console.log(`Live scan result: ${bestMatch.toString()}`);
+                        
+                        if (bestMatch.label === 'Special Someone') {
+                            clearInterval(scanInterval);
+                            document.getElementById('scan-status').innerText = "Identity Verified! Welcome.";
+                            document.getElementById('webcam').style.borderColor = "#00ff00";
+                            
+                            // Unlock the 3D Room!
+                            setTimeout(() => {
+                                document.getElementById('ui-layer').style.opacity = '0';
+                                setTimeout(() => {
+                                    document.getElementById('ui-layer').style.display = 'none';
+                                    document.getElementById('crosshair').style.display = 'block';
+                                    document.getElementById('instructions').style.display = 'block';
+                                    init3D();
+                                }, 1000);
+                            }, 1500);
+                        }
+                    }
+                } catch (err) {
+                    console.error("Scan error:", err);
+                }
+            }, 500);
+        }
+
+        // Start the engine
+        initFaceAPI();
+
+        // ==========================================
+        // 3. THREE.JS ENGINE SETUP
+        // ==========================================
+        function init3D() {
+            // Setup Scene
+            scene = new THREE.Scene();
+            scene.background = new THREE.Color(0x000000);
+
+            // Setup Camera
+            camera = new THREE.PerspectiveCamera(75, window.innerWidth / window.innerHeight, 0.1, 1000);
+            camera.position.y = 2; // Player height
+            scene.add(camera); // Required for First Person Items
+
+            // Setup Renderer
+            renderer = new THREE.WebGLRenderer({ antialias: true });
+            renderer.setSize(window.innerWidth, window.innerHeight);
+            document.body.appendChild(renderer.domElement);
+
+            // Setup Controls (First Person)
+            controls = new PointerLockControls(camera, document.body);
+            document.body.addEventListener('click', () => controls.lock());
+            
+            // Interaction Setup (Raycaster)
+            raycaster = new THREE.Raycaster();
+            mouse = new THREE.Vector2(0, 0); // Always center screen for first person
+
+            // Setup Key Listeners
+            document.addEventListener('keydown', onKeyDown);
+            document.addEventListener('keyup', onKeyUp);
+            document.addEventListener('mousedown', onMouseClick);
+
+            // Load First Room
+            loadRoom(currentRoom);
+
+            // Start Animation Loop
+            animate();
+        }
+
+        // ==========================================
+// ==========================================
+        // 4. ROOM MANAGERS (HP & K-POP)
+        // ==========================================
+        function clearScene() {
+            while(scene.children.length > 0){ 
+                scene.remove(scene.children[0]); 
+            }
+            interactableObjects = [];
+        }
+
+        function loadRoom(roomIndex) {
+            clearScene();
+            
+            // FIX 1: Re-add the camera immediately so its children can render!
+            if (typeof camera !== 'undefined') {
+                scene.add(camera);
+            }
+            
+            const floorGeo = new THREE.PlaneGeometry(20, 20);
+            const wallGeo = new THREE.PlaneGeometry(20, 10);
+            
+            // ... (rest of your loadRoom code remains exactly the same)
+
+        if (roomIndex === 0) {
+                // --- ROOM 0: GRYFFINDOR / GREAT HALL VIBE ---
+                scene.background = new THREE.Color(0x020205); // Pitch black night sky for the ceiling
+                
+                // 1. WARM, COZY LIGHTING
+                scene.fog = new THREE.FogExp2(0x050300, 0.04); // Warm dark fog
+                
+                const ambientLight = new THREE.AmbientLight(0x403020); // Firelight base
+                scene.add(ambientLight);
+
+                const centerLight = new THREE.PointLight(0xffa500, 2.5, 25); // Bright orange/yellow glow
+                centerLight.position.set(0, 3, -5);
+                scene.add(centerLight);
+
+                // 2. REALISTIC CASTLE WALLS (Using your image)
+                const textureLoader = new THREE.TextureLoader();
+                const wallTexture = textureLoader.load('./stone.jpg'); // Loads your downloaded image
+                
+                // Make the image repeat like wallpaper so it doesn't stretch
+                wallTexture.wrapS = THREE.RepeatWrapping;
+                wallTexture.wrapT = THREE.RepeatWrapping;
+                wallTexture.repeat.set(4, 2); 
+
+                const castleMaterial = new THREE.MeshStandardMaterial({ 
+                    map: wallTexture, 
+                    roughness: 0.9, 
+                    metalness: 0.1 
+                });
+                buildRoomGeometry(floorGeo, wallGeo, castleMaterial);
+
+                // --- THE FAULTY 3D BRICK ---
+                const brickGeo = new THREE.PlaneGeometry(1.5, 0.5); // Roughly the size of one brick
+                
+                // Give it a slightly darker, "corrupted" color so it stands out if she looks closely
+                const brickMat = new THREE.MeshStandardMaterial({ 
+                    color: 0x2a1a1a, 
+                    roughness: 0.1, // Make it slightly shiny/weird compared to the rough wall
+                    metalness: 0.5 
+                });
+                
+                const faultyBrick = new THREE.Mesh(brickGeo, brickMat);
+                
+                // Position it on the back wall, slightly offset, just barely floating in front of the wall texture
+                faultyBrick.position.set(3, 2, -9.9); 
+                faultyBrick.userData = { isFaultyBrick: true };
+                
+                scene.add(faultyBrick);
+                
+                // Save it globally so we can make it interactable ONLY after the orb is caught
+                window.secretBrick = faultyBrick;
+
+                // 3. THE ENCHANTED CEILING (Moving Stars)
+                const starsGeo = new THREE.BufferGeometry();
+                const starsCount = 1500;
+                const starPos = new Float32Array(starsCount * 3);
+                
+                for(let i=0; i < starsCount * 3; i+=3) {
+                    starPos[i] = (Math.random() - 0.5) * 40;     // X spread
+                    starPos[i+1] = 8 + (Math.random() * 4);      // Y height (locked high up near the ceiling)
+                    starPos[i+2] = (Math.random() - 0.5) * 40;     // Z spread
+                }
+                
+                starsGeo.setAttribute('position', new THREE.BufferAttribute(starPos, 3));
+                const starsMat = new THREE.PointsMaterial({
+                    color: 0xffffff,
+                    size: 0.05,
+                    transparent: true,
+                    opacity: 0.8
+                });
+                
+                // Attach to window object so we can animate it globally
+                window.enchantedStars = new THREE.Points(starsGeo, starsMat);
+                scene.add(window.enchantedStars);
+
+                // ... [KEEP YOUR PEDESTAL AND WAND CODE HERE] ...
+
+                // The Pedestal
+                const pedGeo = new THREE.CylinderGeometry(1, 1.2, 1, 8);
+                const pedMat = new THREE.MeshStandardMaterial({ color: 0x111111 });
+                const pedestal = new THREE.Mesh(pedGeo, pedMat);
+                pedestal.position.set(0, 0.5, -5);
+                scene.add(pedestal);
+
+             // --- THE 3 WANDS ---
+                // Wand 1: Oak Decoy
+                const wand1 = createDetailedWand(0x5c4033, false);
+                wand1.position.set(-1.5, 1.5, -5);
+                wand1.rotation.set(0, 0, Math.PI / 4);
+                // Attach hit-box data to the whole group
+                wand1.children.forEach(child => child.userData = { isCorrect: false, message: "A sturdy oak wand, but it ignores you." });
+                scene.add(wand1);
+                interactableObjects.push(...wand1.children);
+
+                // Wand 2: The Elder Wand (Correct)
+                const wand2 = createDetailedWand(0x222222, true);
+                wand2.position.set(0, 1.8, -5); 
+                wand2.rotation.set(0, 0, Math.PI / 2); 
+                wand2.children.forEach(child => child.userData = { isCorrect: true, isElderWand: true }); 
+                scene.add(wand2);
+                interactableObjects.push(...wand2.children);
+
+                // Wand 3: Ash Decoy
+                const wand3 = createDetailedWand(0xd2b48c, false);
+                wand3.position.set(1.5, 1.5, -5);
+                wand3.rotation.set(0, 0, -Math.PI / 4);
+                wand3.children.forEach(child => child.userData = { isCorrect: false, message: "A flexible ash wand. It doesn't spark." });
+                scene.add(wand3);
+                interactableObjects.push(...wand3.children);
+
+                document.getElementById('instructions').innerHTML = "Click screen to look. WASD to move.<br/><em>'Choose wisely to unlock the next realm...'</em>";
+
+            } else if (roomIndex === 1) {
+                // --- ROOM 1: THE NEON K-POP STAGE ---
+                scene.background = new THREE.Color(0x050510); // Dark concert vibe
+                
+                const ambientLight = new THREE.AmbientLight(0x202020);
+                scene.add(ambientLight);
+
+                const spotLight1 = new THREE.SpotLight(0xff00ff, 50, 20, Math.PI/4, 0.5, 1); // Magenta
+                spotLight1.position.set(-5, 8, -5);
+                spotLight1.target.position.set(0, 0, -5);
+                scene.add(spotLight1);
+                scene.add(spotLight1.target);
+
+                const spotLight2 = new THREE.SpotLight(0x00ffff, 50, 20, Math.PI/4, 0.5, 1); // Cyan
+                spotLight2.position.set(5, 8, -5);
+                spotLight2.target.position.set(0, 0, -5);
+                scene.add(spotLight2);
+                scene.add(spotLight2.target);
+
+                const floorMat = new THREE.MeshStandardMaterial({ color: 0x111111, roughness: 0.2, metalness: 0.8 });
+                buildRoomGeometry(floorGeo, wallGeo, floorMat);
+
+                const stageGeo = new THREE.BoxGeometry(6, 0.5, 4);
+                const stageMat = new THREE.MeshStandardMaterial({ color: 0xffffff, emissive: 0x222222 });
+                const stage = new THREE.Mesh(stageGeo, stageMat);
+                stage.position.set(0, 0.25, -6);
+                scene.add(stage);
+
+                // The Lightstick Puzzle
+                function createLightstick(colorHex, xPos, isCorrect, message) {
+                    const stickGroup = new THREE.Group();
+                    
+                    const handleGeo = new THREE.CylinderGeometry(0.05, 0.05, 0.6, 16);
+                    const handleMat = new THREE.MeshStandardMaterial({ color: 0x333333 });
+                    const handle = new THREE.Mesh(handleGeo, handleMat);
+                    handle.position.y = 0.3;
+                    stickGroup.add(handle);
+
+                    const bulbGeo = new THREE.SphereGeometry(0.15, 16, 16);
+                    const bulbMat = new THREE.MeshStandardMaterial({ 
+                        color: colorHex, emissive: colorHex, emissiveIntensity: 0.8 
+                    });
+                    const bulb = new THREE.Mesh(bulbGeo, bulbMat);
+                    bulb.position.y = 0.7;
+                    stickGroup.add(bulb);
+
+                    stickGroup.position.set(xPos, 0.5, -5.5);
+                    bulb.userData = { isCorrect: isCorrect, message: message };
+                    interactableObjects.push(bulb);
+                    return stickGroup;
+                }
+
+                const lightstick1 = createLightstick(0xff0000, -1.5, false, "A red lightstick... not quite the right vibe."); 
+                const lightstick2 = createLightstick(0xffb6c1, 0, true, "The Pink Lightstick! You found it!"); // Correct
+                const lightstick3 = createLightstick(0x00ff00, 1.5, false, "A green lightstick... close, but no.");
+                
+                scene.add(lightstick1, lightstick2, lightstick3);
+
+                document.getElementById('instructions').innerHTML = "Click screen to look. WASD to move.<br/><em>'Grab the lightstick that represents your heart to win!'</em>";
+            }
+        }
+
+        function buildRoomGeometry(floorGeo, wallGeo, material) {
+            const floor = new THREE.Mesh(floorGeo, material);
+            floor.rotation.x = -Math.PI / 2;
+            scene.add(floor);
+
+            const wallFront = new THREE.Mesh(wallGeo, material);
+            wallFront.position.set(0, 5, -10);
+            scene.add(wallFront);
+
+            const wallBack = new THREE.Mesh(wallGeo, material);
+            wallBack.position.set(0, 5, 10);
+            wallBack.rotation.y = Math.PI;
+            scene.add(wallBack);
+
+            const wallLeft = new THREE.Mesh(wallGeo, material);
+            wallLeft.position.set(-10, 5, 0);
+            wallLeft.rotation.y = Math.PI / 2;
+            scene.add(wallLeft);
+
+            const wallRight = new THREE.Mesh(wallGeo, material);
+            wallRight.position.set(10, 5, 0);
+            wallRight.rotation.y = -Math.PI / 2;
+            scene.add(wallRight);
+        }
+        function createDetailedWand(woodColor, isElder) {
+            const wandGroup = new THREE.Group();
+
+            // The Handle (Thicker, darker)
+            const handleGeo = new THREE.CylinderGeometry(0.04, 0.06, 0.4, 12);
+            const handleMat = new THREE.MeshStandardMaterial({ color: 0x111111, roughness: 0.9 });
+            const handle = new THREE.Mesh(handleGeo, handleMat);
+            handle.position.y = -0.6;
+            wandGroup.add(handle);
+
+            // The Shaft (Tapered, colored wood)
+            const shaftGeo = new THREE.CylinderGeometry(0.01, 0.04, 1.2, 12);
+            const shaftMat = new THREE.MeshStandardMaterial({ color: woodColor, roughness: 0.7 });
+            const shaft = new THREE.Mesh(shaftGeo, shaftMat);
+            wandGroup.add(shaft);
+
+            // Optional: The Elder Wand gets a subtle glowing core tip
+            if (isElder) {
+                const tipGeo = new THREE.SphereGeometry(0.03, 16, 16);
+                const tipMat = new THREE.MeshStandardMaterial({ color: 0xdddddd, emissive: 0xffffff, emissiveIntensity: 0.5 });
+                const tip = new THREE.Mesh(tipGeo, tipMat);
+                tip.position.y = 0.6;
+                wandGroup.add(tip);
+            }
+
+            return wandGroup;
+        }
+
+      // ==========================================
+        // 5. INTERACTION, ANIMATION & MOVEMENT LOGIC
+        // ==========================================
+        
+        // --- NEW: Animation Trackers ---
+        let activeWand = null;
+        let isCasting = false;
+        let castAnimationTimer = 0;
+
+       function onMouseClick() {
+            if (!controls.isLocked) return;
+
+// ==========================================
+            // IF HOLDING WAND: EVERY CLICK IS A SPELL
+            // ==========================================
+            if (activeWand) {
+                if (!isCasting) {
+                    isCasting = true;
+                    castAnimationTimer = 0; 
+
+                    raycaster.setFromCamera(mouse, camera);
+                    const intersects = raycaster.intersectObjects(interactableObjects);
+
+                    if (intersects.length > 0) {
+                        const hitObject = intersects[0].object;
+
+                        // SCENARIO A: SHE SHOT THE ORB
+                        if (hitObject.userData.isOrb) {
+                            document.getElementById('instructions').innerHTML = "<em>You caught it! Read the letter... (Press ESC to unlock your mouse)</em>";
+                            
+                            scene.remove(hitObject);
+                            window.patronusOrb = null;
+                            
+                            // Make the wall brick interactable now!
+                            interactableObjects = [window.secretBrick]; 
+                            
+                            document.getElementById('letter-overlay').style.display = 'block';
+
+                        // SCENARIO B: SHE SHOT THE FAULTY BRICK
+                        } else if (hitObject.userData.isFaultyBrick) {
+                            document.getElementById('instructions').innerHTML = "<span style='color: #ff3333;'>FIREWALL ACTIVE: Console override required. Press F12.</span>";
+                        }
+                    } else {
+                        // SCENARIO C: SHE MISSED
+                        document.getElementById('instructions').innerHTML = "<em>Sparks fly! Keep looking...</em>";
+                    }
+                }
+                return;
+            }
+
+            // ==========================================
+            // IF HAND IS EMPTY: TRY TO PICK UP ITEMS
+            // ==========================================
+            raycaster.setFromCamera(mouse, camera);
+            const intersects = raycaster.intersectObjects(interactableObjects);
+
+            if (intersects.length > 0) {
+                const clickedPart = intersects[0].object;
+                
+                if (clickedPart.userData.isElderWand) {
+                    // Equip the Wand
+                    const equippedWand = clickedPart.parent.clone(); 
+                    equippedWand.children.forEach(c => c.userData = {}); 
+                    equippedWand.scale.set(0.5, 0.5, 0.5);
+                    equippedWand.position.set(-0.8, -0.7, -1.2); 
+                    equippedWand.rotation.set(-Math.PI / 2.5, 0.3, 0.2); 
+                    
+                    const lumosLight = new THREE.PointLight(0xffffff, 10, 30);
+                    lumosLight.position.set(0, 0.6, 0); 
+                    equippedWand.add(lumosLight);
+                    camera.add(equippedWand);
+                    activeWand = equippedWand;
+                    scene.remove(clickedPart.parent);
+
+                    // --- NEW: SPAWN THE FLYING ORB INSTEAD OF THE PORTAL ---
+                    const orbGeo = new THREE.SphereGeometry(0.3, 16, 16);
+                    const orbMat = new THREE.MeshStandardMaterial({ color: 0x0088ff, emissive: 0x0088ff, emissiveIntensity: 2 });
+                    const orb = new THREE.Mesh(orbGeo, orbMat);
+                    orb.position.set(0, 3, -5); // Start position
+                    
+                    const orbLight = new THREE.PointLight(0x00aaff, 5, 10);
+                    orb.add(orbLight);
+                    orb.userData = { isOrb: true };
+                    
+                    scene.add(orb);
+                    window.patronusOrb = orb; // Save globally so we can animate it
+                    
+                    interactableObjects = [orb]; 
+                    document.getElementById('instructions').innerHTML = "<em>The wand is yours! Shoot the flying Patronus orb!</em>";
+
+                } else if (clickedPart.userData.message) {
+                    alert(clickedPart.userData.message);
+                }
+            }
+        }
+
+        // --- WASD MOVEMENT ---
+        function onKeyDown(event) {
+            switch (event.code) {
+                case 'KeyW': moveState.forward = true; break;
+                case 'KeyA': moveState.left = true; break;
+                case 'KeyS': moveState.backward = true; break;
+                case 'KeyD': moveState.right = true; break;
+            }
+        }
+
+        function onKeyUp(event) {
+            switch (event.code) {
+                case 'KeyW': moveState.forward = false; break;
+                case 'KeyA': moveState.left = false; break;
+                case 'KeyS': moveState.backward = false; break;
+                case 'KeyD': moveState.right = false; break;
+            }
+        }
+
+        // --- MAIN GAME LOOP ---
+        function animate() {
+            requestAnimationFrame(animate);
+
+            // 1. WASD Physics
+            if (controls.isLocked === true) {
+                const time = performance.now();
+                const delta = (time - prevTime) / 1000;
+
+                velocity.x -= velocity.x * 10.0 * delta;
+                velocity.z -= velocity.z * 10.0 * delta;
+
+                direction.z = Number(moveState.forward) - Number(moveState.backward);
+                direction.x = Number(moveState.right) - Number(moveState.left);
+                direction.normalize();
+
+                const speed = 40.0;
+                if (moveState.forward || moveState.backward) velocity.z -= direction.z * speed * delta;
+                if (moveState.left || moveState.right) velocity.x -= direction.x * speed * delta;
+
+                controls.moveRight(-velocity.x * delta);
+                controls.moveForward(-velocity.z * delta);
+
+                prevTime = time;
+            }
+
+            // 2. Rotate the Enchanted Star Ceiling
+            if (window.enchantedStars) {
+                window.enchantedStars.rotation.y += 0.0003;
+            }
+
+            // --- FLYING ORB PHYSICS ---
+            if (window.patronusOrb) {
+                const clockTime = performance.now() * 0.002; // Get continuous time
+                // Math.sin and Math.cos create a swooping, flying path
+                window.patronusOrb.position.x = Math.sin(clockTime * 1.5) * 6; // Swoop left/right
+                window.patronusOrb.position.y = 3 + Math.cos(clockTime * 2.5) * 1.5; // Bob up/down
+                window.patronusOrb.position.z = -5 + Math.sin(clockTime) * 4; // Swoop forward/back
+            }
+
+            // 3. Wand Casting Animation (The Swish and Flick)
+            if (isCasting && activeWand) {
+                castAnimationTimer += 0.15; // Speed of the flick
+                
+                const thrust = Math.sin(castAnimationTimer); 
+                
+                // Push forward (Z), slightly down (Y), and rotate tip (X)
+                activeWand.position.z = -1.2 - (thrust * 0.6); 
+                activeWand.position.y = -0.7 - (thrust * 0.1);
+                activeWand.rotation.x = (-Math.PI / 2.5) - (thrust * 0.4);
+
+                // Stop the animation when the wave completes
+                if (castAnimationTimer >= Math.PI) {
+                    isCasting = false;
+                    
+                    // Snap back to resting Minecraft coordinates
+                    activeWand.position.set(-0.8, -0.7, -1.2);
+                    activeWand.rotation.set(-Math.PI / 2.5, 0.3, 0.2);
+                }
+            }
+
+            // 4. Render the Screen
+            if (renderer && scene && camera) {
+                renderer.render(scene, camera);
+            }
+        }
+
+        // Handle window resize
+        window.addEventListener('resize', () => {
+            if (camera && renderer) {
+                camera.aspect = window.innerWidth / window.innerHeight;
+                camera.updateProjectionMatrix();
+                renderer.setSize(window.innerWidth, window.innerHeight);
+            }
+        });
+
+        // ==========================================
+        // UI BUTTON LISTENERS
+        // ==========================================
+        
+        // 1. Close the letter and go back to the game
+        document.getElementById('close-letter-btn').addEventListener('click', () => {
+            document.getElementById('letter-overlay').style.display = 'none';
+            document.body.requestPointerLock(); // Relock the mouse to the game!
+        });
+
+        // 2. The Web Dev Escape Hatch
+        document.getElementById('faulty-brick-escape-btn').addEventListener('click', () => {
+            // ... (keep your existing escape hatch logic here) ...
+            document.getElementById('letter-overlay').style.display = 'none';
+            camera.clear(); 
+            activeWand = null; 
+            currentRoom++;
+            if (currentRoom > 1) {
+                alert("You finished the game! Happy Birthday!");
+            } else {
+                document.body.requestPointerLock(); 
+                loadRoom(currentRoom);
+            }
+        });
+
+        // ==========================================
+        // THE JAVASCRIPT CONSOLE HACK
+        // ==========================================
+        window.bypassFirewall = function() {
+            console.log("%c💥 FIREWALL BREACHED! PORTAL OPENING... 💥", "color: #00ff00; font-size: 20px; font-weight: bold;");
+            
+            // Clean up the room
+            document.getElementById('letter-overlay').style.display = 'none';
+            if (typeof camera !== 'undefined') camera.clear(); 
+            activeWand = null; 
+            
+            // Teleport
+            currentRoom++;
+            if (currentRoom > 1) {
+                alert("You finished the game! Happy Birthday!");
+            } else {
+                // Force the mouse to unlock so she isn't stuck in the console
+                if (document.pointerLockElement) {
+                    document.exitPointerLock();
+                }
+                loadRoom(currentRoom);
+            }
+            
+            return "Teleport sequence initiated.";
+        };
+
+        // Give her a hint in the console when the page loads
+        console.log("%c🔒 System Secure. Waiting for manual override...", "color: #ffaa00; font-size: 14px;");
+
+       
+    </script>
+</body>
+</html>
