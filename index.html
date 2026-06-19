@@ -141,6 +141,8 @@
     <button onclick="document.getElementById('ui-container').style.display='none'" style="padding: 10px 25px; background: transparent; border: 1px solid #ffcc00; color: #ffcc00; font-size: 1.1rem; cursor: pointer; transition: 0.3s;">Close</button>
    </div>
 
+   <div id="fade-curtain" style="display: none; position: fixed; top: 0; left: 0; width: 100vw; height: 100vh; background: black; z-index: 999999; opacity: 0; transition: opacity 1.5s ease; pointer-events: none;"></div>
+
     <script>
         // ==========================================
         // 1. GLOBAL STATE & HTML ELEMENTS
@@ -1430,38 +1432,56 @@ function showUI(title, text) {
             event.stopPropagation();
         });
 
-// ==========================================
-        // TELEPORT TO ROOM 1 (ROOM OF REQUIREMENT)
+// =====// ==========================================
+        // TELEPORT TO ROOM 1 (CINEMATIC FADE)
         // ==========================================
         document.getElementById('next-room-btn').addEventListener('click', () => {
             
-            // --- THE NUCLEAR UI CLEANUP ---
+            // 1. Hide the old UI panels immediately
             const letter = document.getElementById('letter-overlay');
-            if (letter) {
-                letter.style.display = 'none';
-            }
-            
-            // Force the transition message and password box to hide
+            if (letter) letter.style.display = 'none';
             document.getElementById('transition-overlay').style.display = 'none';
             document.getElementById('password-overlay').style.display = 'none';
             
-            // --- TELEPORTATION LOGIC ---
-            // Vaporize all 3D objects from Room 0 (like the glowing text)
-            while(scene.children.length > 0){ 
-                scene.remove(scene.children[0]); 
-            }
+            // 2. Grab the curtain and turn it on
+            const curtain = document.getElementById('fade-curtain');
+            curtain.style.display = 'block';
             
-            if (typeof camera !== 'undefined') camera.clear(); 
-            activeWand = null; 
-            currentRoom++;
-            
-            if (currentRoom > 1) {
-                alert("You finished the game! Happy Birthday!");
-            } else {
-                // Lock the mouse back in and load the new room!
-                document.body.requestPointerLock(); 
-                loadRoom(currentRoom);
-            }
+            // 3. Trigger the fade-to-black animation
+            setTimeout(() => {
+                curtain.style.opacity = '1';
+            }, 50);
+
+            // 4. WAIT 1.5 SECONDS FOR THE SCREEN TO GO PITCH BLACK
+            setTimeout(() => {
+                
+                // --- SECRETLY SWAP THE ROOMS IN THE DARK ---
+                clearScene(); 
+                if (typeof camera !== 'undefined') camera.clear(); 
+                activeWand = null; 
+                currentRoom++;
+                
+                if (currentRoom > 1) {
+                    alert("You finished the game! Happy Birthday!");
+                } else {
+                    // Lock the mouse back in
+                    document.body.requestPointerLock(); 
+                    
+                    // Start loading Room 1
+                    loadRoom(currentRoom);
+                    
+                    // 5. GIVE THE 3D MODELS TIME TO LOAD, THEN LIFT THE CURTAIN
+                    // We wait 2 extra seconds in the dark so the furniture can finish downloading
+                    setTimeout(() => {
+                        curtain.style.opacity = '0'; // Fade back to transparent
+                        
+                        // Turn the curtain off completely once the fade finishes
+                        setTimeout(() => {
+                            curtain.style.display = 'none';
+                        }, 1500); 
+                    }, 2000); 
+                }
+            }, 1500); // Time it takes for the initial fade-to-black
         });
 
         // ==========================================
