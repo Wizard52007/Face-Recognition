@@ -86,13 +86,20 @@
 
   <div id="letter-overlay" style="display: none; position: absolute; top: 50%; left: 50%; transform: translate(-50%, -50%); background: #f4e8c1; padding: 30px; border-radius: 5px; color: #333; font-family: 'Times New Roman', serif; text-align: center; max-width: 450px; box-shadow: 0 0 20px rgba(255,255,255,0.5); z-index: 9999;">
         <h2 style="margin-top: 0; border-bottom: 2px solid #333; padding-bottom: 10px;">A Message Appears...</h2>
-        <p style="font-size: 18px; line-height: 1.5;">Congrats on catching the orb, you proved that you are not lazy like a panda 👽</p>
-        <p style="font-size: 18px; line-height: 1.5;">Now as you already learnt web development (I hope so), test your knowledge and find which brick is faulty in the room.</p>
-        <p style="font-size: 14px; font-style: italic; color: #666; margin-top: 20px; margin-bottom: 20px;">(Hint: You might need developer tools to escape this dimension...)</p>
+        <p style="font-size: 18px; line-height: 1.5;">Are you ready to dive in the world of Wizard, Lets Beginnn👽</p>
+        <p style="font-size: 18px; line-height: 1.5;">Choose the right wand, and let the magic unfold!</p>
+        <p style="font-size: 14px; font-style: italic; color: #666; margin-top: 20px; margin-bottom: 20px;">(Hint: Catch it or lose it...)</p>
 
   
         
         <button id="close-letter-btn" style="padding: 10px 20px; font-size: 16px; cursor: pointer; background-color: #333; color: white; border: none; border-radius: 3px;">Accept Challenge</button>
+    </div>
+
+    <div id="transition-overlay" style="display: none; position: fixed; top: 50%; left: 50%; transform: translate(-50%, -50%); background: rgba(10, 10, 20, 0.95); padding: 40px; border: 2px solid #ffaa00; border-radius: 10px; color: #ffaa00; text-align: center; z-index: 2147483647; max-width: 500px; box-shadow: 0 0 50px rgba(255, 170, 0, 0.8);">
+        <h2 style="font-family: 'Times New Roman', serif; border-bottom: 1px solid #ffaa00; padding-bottom: 10px; margin-top: 0;">Chamber Cleared</h2>
+        <p style="font-size: 18px; line-height: 1.6; color: white;">Congrats on conquering the first room, you have proved that you are worthy of being called a wizard. But this is just the beginning there is so much to come after this.... So buckle up your seats and get ready to move on.</p>
+        
+        <button id="next-room-btn" style="margin-top: 20px; padding: 10px 30px; font-size: 18px; background-color: #ffaa00; color: #000; border: none; cursor: pointer; font-weight: bold; border-radius: 5px; text-transform: uppercase;">Enter the Next Realm</button>
     </div>
 
 
@@ -128,6 +135,12 @@
         <button id="submit-password" style="padding: 10px 30px; font-size: 18px; background-color: #ffaa00; color: #000; border: none; cursor: pointer; font-weight: bold; border-radius: 5px; text-transform: uppercase;">Cast Spell</button>
     </div>
 
+    <div id="ui-container" style="display: none; position: absolute; top: 50%; left: 50%; transform: translate(-50%, -50%); background: rgba(10, 10, 15, 0.95); border: 2px solid #ffcc00; padding: 40px; color: #ffcc00; text-align: center; font-family: serif; z-index: 100; max-width: 500px; border-radius: 5px; box-shadow: 0 0 30px rgba(255, 204, 0, 0.3);">
+    <h2 id="ui-title" style="margin-top: 0; border-bottom: 1px solid #ffcc00; padding-bottom: 10px;">Title</h2>
+    <p id="ui-text" style="font-size: 1.3rem; line-height: 1.6; white-space: pre-wrap; margin: 30px 0;"></p>
+    <button onclick="document.getElementById('ui-container').style.display='none'" style="padding: 10px 25px; background: transparent; border: 1px solid #ffcc00; color: #ffcc00; font-size: 1.1rem; cursor: pointer; transition: 0.3s;">Close</button>
+   </div>
+
     <script>
         // ==========================================
         // 1. GLOBAL STATE & HTML ELEMENTS
@@ -136,6 +149,7 @@
         let raycaster, mouse;
         let interactableObjects = []; // Objects the user can click
         let currentRoom = 0; // 0 = HP, 1 = K-Pop
+        const gltfLoader = new THREE.GLTFLoader();
 
         // Movement state
         const moveState = { forward: false, backward: false, left: false, right: false };
@@ -147,6 +161,19 @@
         const crosshair = document.getElementById('crosshair');
         const instructions = document.getElementById('instructions');
         const bypassBtn = document.getElementById('bypass-btn');
+
+        // ==========================================
+// GLOBAL GAME LOGIC (Paste at top of file)
+// ==========================================
+window.currentInteractables = []; 
+
+function showUI(title, text) {
+    document.getElementById('ui-title').innerText = title;
+    document.getElementById('ui-text').innerText = text;
+    document.getElementById('ui-container').style.display = 'block';
+}
+
+        
 
 // ==========================================
         // 2. THE GATEWAY (MODERN FACE API VIA CDN)
@@ -277,6 +304,7 @@
         // 3. THREE.JS ENGINE SETUP
         // ==========================================
         function init3D() {
+
             // Setup Scene
             scene = new THREE.Scene();
             scene.background = new THREE.Color(0x000000);
@@ -290,6 +318,8 @@
             renderer = new THREE.WebGLRenderer({ antialias: true });
             renderer.setSize(window.innerWidth, window.innerHeight);
             document.body.appendChild(renderer.domElement);
+            renderer.shadowMap.enabled = true;
+            renderer.shadowMap.type = THREE.PCFSoftShadowMap;
 
             // Setup Controls (First Person)
             controls = new THREE.PointerLockControls(camera, document.body);
@@ -299,10 +329,26 @@
             raycaster = new THREE.Raycaster();
             mouse = new THREE.Vector2(0, 0); // Always center screen for first person
 
+
             // Setup Key Listeners
             document.addEventListener('keydown', onKeyDown);
             document.addEventListener('keyup', onKeyUp);
             document.addEventListener('mousedown', onMouseClick);
+
+            // --- DEVELOPER SANDBOX MODE ---
+        // Change this number to instantly spawn in the room you are building!
+        // 0 = The First Chamber
+        // 1 = The Room of Requirement
+        currentRoom = 0; 
+
+        // Important: If you skip to Room 1, you must manually hide the Room 0 UI elements
+        if (currentRoom > 0) {
+                const letter = document.getElementById('letter-overlay');
+                if (letter) letter.style.display = 'none';
+            } else {
+                // Force the welcoming letter to show up for Room 0!
+                document.getElementById('letter-overlay').style.display = 'block';
+            }
 
             // Load First Room
             loadRoom(currentRoom);
@@ -340,6 +386,11 @@
             // FIX 1: Re-add the camera immediately so its children can render!
             if (typeof camera !== 'undefined') {
                 scene.add(camera);
+                // 1. Teleport back to the center of the room
+                camera.position.set(0, 2, 0); 
+                
+                // 2. Reset the camera to look straight ahead
+                camera.rotation.set(0, 0, 0);
             }
             
             const floorGeo = new THREE.PlaneGeometry(20, 20);
@@ -490,65 +541,416 @@
 
                 document.getElementById('instructions').innerHTML = "Click screen to look. WASD to move.<br/><em>'Choose wisely to unlock the next realm...'</em>";
 
-            } else if (roomIndex === 1) {
-                // --- ROOM 1: THE NEON K-POP STAGE ---
-                scene.background = new THREE.Color(0x050510); // Dark concert vibe
+           } else if (roomIndex === 1) {
+                // --- ROOM 1: THE ROOM OF REQUIREMENT ---
                 
-                const ambientLight = new THREE.AmbientLight(0x202020);
+               // ==========================================
+                // 1. TRUE PITCH BLACK LIGHTING
+                // ==========================================
+                // Pure, absolute black void
+                const fogColor = new THREE.Color(0x000000); 
+                scene.background = fogColor;
+                
+                // Fog starts immediately at the camera (0) and swallows the light at 15 units.
+                // This makes the Lumos light act like a tight flashlight beam!
+                scene.fog = new THREE.Fog(fogColor, 0, 15); 
+                
+                // Ambient light turned completely OFF (Intensity 0.0)
+                const ambientLight = new THREE.AmbientLight(0xffffff, 0.0); 
                 scene.add(ambientLight);
 
-                const spotLight1 = new THREE.SpotLight(0xff00ff, 50, 20, Math.PI/4, 0.5, 1); // Magenta
-                spotLight1.position.set(-5, 8, -5);
-                spotLight1.target.position.set(0, 0, -5);
-                scene.add(spotLight1);
-                scene.add(spotLight1.target);
+                // NOTE: We have completely removed the `roomLight` that was here previously!
+                // There are no other lights in this room now.
 
-                const spotLight2 = new THREE.SpotLight(0x00ffff, 50, 20, Math.PI/4, 0.5, 1); // Cyan
-                spotLight2.position.set(5, 8, -5);
-                spotLight2.target.position.set(0, 0, -5);
-                scene.add(spotLight2);
-                scene.add(spotLight2.target);
+               
 
-                const floorMat = new THREE.MeshStandardMaterial({ color: 0x111111, roughness: 0.2, metalness: 0.8 });
-                buildRoomGeometry(floorGeo, wallGeo, floorMat);
+               // ==========================================
+                // 1.1 TRUE VOLUMETRIC SMOKE (Procedural Texture)
+                // ==========================================
+                // 1. Generate a soft, fuzzy circle using pure code (No downloads needed!)
+                const canvas = document.createElement('canvas');
+                canvas.width = 64;
+                canvas.height = 64;
+                const context = canvas.getContext('2d');
+                
+                const gradient = context.createRadialGradient(32, 32, 0, 32, 32, 32);
+                gradient.addColorStop(0, 'rgba(255, 255, 255, 1)'); // Solid white core
+                gradient.addColorStop(1, 'rgba(255, 255, 255, 0)'); // Fades to invisible at the edges
+                context.fillStyle = gradient;
+                context.fillRect(0, 0, 64, 64);
+                
+                const smokeTexture = new THREE.CanvasTexture(canvas);
 
-                const stageGeo = new THREE.BoxGeometry(6, 0.5, 4);
-                const stageMat = new THREE.MeshStandardMaterial({ color: 0xffffff, emissive: 0x222222 });
-                const stage = new THREE.Mesh(stageGeo, stageMat);
-                stage.position.set(0, 0.25, -6);
-                scene.add(stage);
+                // 2. Build 500 giant, floating smoke puffs
+                const smokeGeo = new THREE.BufferGeometry();
+                const smokeCount = 500; 
+                const posArray = new Float32Array(smokeCount * 3);
 
-                // The Lightstick Puzzle
-                function createLightstick(colorHex, xPos, isCorrect, message) {
-                    const stickGroup = new THREE.Group();
-                    
-                    const handleGeo = new THREE.CylinderGeometry(0.05, 0.05, 0.6, 16);
-                    const handleMat = new THREE.MeshStandardMaterial({ color: 0x333333 });
-                    const handle = new THREE.Mesh(handleGeo, handleMat);
-                    handle.position.y = 0.3;
-                    stickGroup.add(handle);
-
-                    const bulbGeo = new THREE.SphereGeometry(0.15, 16, 16);
-                    const bulbMat = new THREE.MeshStandardMaterial({ 
-                        color: colorHex, emissive: colorHex, emissiveIntensity: 0.8 
-                    });
-                    const bulb = new THREE.Mesh(bulbGeo, bulbMat);
-                    bulb.position.y = 0.7;
-                    stickGroup.add(bulb);
-
-                    stickGroup.position.set(xPos, 0.5, -5.5);
-                    bulb.userData = { isCorrect: isCorrect, message: message };
-                    interactableObjects.push(bulb);
-                    return stickGroup;
+                for(let i = 0; i < smokeCount * 3; i++) {
+                    // Spread the smoke wide across the room, but keep it close to the floor
+                    if (i % 3 === 1) { 
+                        posArray[i] = (Math.random() * 5); // Y axis (Height): Keeps smoke floating low
+                    } else {
+                        posArray[i] = (Math.random() - 0.5) * 30; // X and Z axes (Spread)
+                    }
                 }
 
-                const lightstick1 = createLightstick(0xff0000, -1.5, false, "A red lightstick... not quite the right vibe."); 
-                const lightstick2 = createLightstick(0xffb6c1, 0, true, "The Pink Lightstick! You found it!"); // Correct
-                const lightstick3 = createLightstick(0x00ff00, 1.5, false, "A green lightstick... close, but no.");
+                smokeGeo.setAttribute('position', new THREE.BufferAttribute(posArray, 3));
                 
-                scene.add(lightstick1, lightstick2, lightstick3);
+                const smokeMat = new THREE.PointsMaterial({
+                    size: 8.0, // Make the particles MASSIVE so they overlap like a thick fog bank
+                    map: smokeTexture, // Apply our custom fuzzy circle
+                    color: 0x444455, // A dark, creepy grey/blue
+                    transparent: true,
+                    opacity: 0.08, // Very faint so it looks like gas, not solid cotton
+                    depthWrite: false, 
+                    blending: THREE.AdditiveBlending // Makes the wand light interact beautifully with the gas
+                });
 
-                document.getElementById('instructions').innerHTML = "Click screen to look. WASD to move.<br/><em>'Grab the lightstick that represents your heart to win!'</em>";
+                window.movingSmoke = new THREE.Points(smokeGeo, smokeMat);
+                scene.add(window.movingSmoke);
+                // ==========================================
+               // ==========================================
+                // 1.2 RE-EQUIP THE ELDER WAND
+                // ==========================================
+                activeWand = createDetailedWand(0x2a1610, true);
+                
+                // NEW: Make the wand shorter! 
+                // This scales the entire detailed wand down to 65% of its massive size
+                activeWand.scale.set(0.65, 0.65, 0.65);
+
+                // NEW: Move it to the LEFT hand!
+                // X = -0.4 puts it on the left side of your screen
+                activeWand.position.set(-0.4, -0.3, -1); 
+                activeWand.rotation.x = -Math.PI / 4;
+
+                // The Lumos Light
+                const lumosLight = new THREE.PointLight(0xffffff, 2, 7);
+                lumosLight.position.set(1.6, 1, 1); 
+                activeWand.add(lumosLight);
+
+                lumosLight.castShadow = true;
+
+                // Attach to camera
+                camera.add(activeWand);
+                scene.add(camera); 
+
+                
+
+                // ==========================================
+                // ==========================================
+               // ==========================================
+                // 1.5 THE ROOM STRUCTURE (Floor)
+                // ==========================================
+                const textureLoader = new THREE.TextureLoader();
+                const floorTexture = textureLoader.load('floor.jpg'); 
+                
+                floorTexture.wrapS = THREE.RepeatWrapping;
+                floorTexture.wrapT = THREE.RepeatWrapping;
+                floorTexture.repeat.set(3, 3); 
+
+                const floorMaterial = new THREE.MeshStandardMaterial({
+                    map: floorTexture,
+                    // THE MAGIC TRICK: Tint the texture a deep, dark reddish-brown!
+                    color: new THREE.Color(0x4a2511), // Try 0x5e2b17 for cherry, or 0x3d1a0a for dark mahogany
+                    roughness: 0.8, 
+                });
+
+                const floorGeo = new THREE.PlaneGeometry(20, 20); 
+                const floor = new THREE.Mesh(floorGeo, floorMaterial);
+                floor.rotation.x = -Math.PI / 2; 
+                floor.position.y = -0.01; 
+                scene.add(floor);
+                // ==========================================
+                // 1.6 THE ROOM STRUCTURE (Walls)
+                // ==========================================
+                const colorMap = textureLoader.load('_Color.jpg'); 
+                const normalMap = textureLoader.load('_Normal.jpg'); 
+                const roughMap = textureLoader.load('_Roughness.jpg'); 
+                
+                colorMap.wrapS = colorMap.wrapT = THREE.RepeatWrapping;
+                normalMap.wrapS = normalMap.wrapT = THREE.RepeatWrapping;
+                roughMap.wrapS = roughMap.wrapT = THREE.RepeatWrapping;
+                
+                colorMap.repeat.set(4, 2); 
+                normalMap.repeat.set(4, 2); 
+                roughMap.repeat.set(4, 2); 
+
+                const wallMaterial = new THREE.MeshStandardMaterial({
+                    map: colorMap,
+                    normalMap: normalMap, 
+                    roughnessMap: roughMap,
+                    normalScale: new THREE.Vector2(2.0, 2.0) 
+                });
+
+                const wallGeo = new THREE.PlaneGeometry(20, 10);
+
+                // 1. BACK WALL
+                const backWall = new THREE.Mesh(wallGeo, wallMaterial);
+                backWall.position.set(0, 5, -10); 
+                backWall.receiveShadow = true; // <--- Catch shadows!
+                scene.add(backWall);
+
+                // 2. FRONT WALL
+                const frontWall = new THREE.Mesh(wallGeo, wallMaterial);
+                frontWall.position.set(0, 5, 10);
+                frontWall.rotation.y = Math.PI; 
+                frontWall.receiveShadow = true; // <--- Catch shadows!
+                scene.add(frontWall);
+
+                // 3. LEFT WALL
+                const leftWall = new THREE.Mesh(wallGeo, wallMaterial);
+                leftWall.position.set(-10, 5, 0);
+                leftWall.rotation.y = Math.PI / 2; 
+                leftWall.receiveShadow = true; // <--- Catch shadows!
+                scene.add(leftWall);
+
+                // 4. RIGHT WALL
+                const rightWall = new THREE.Mesh(wallGeo, wallMaterial);
+                rightWall.position.set(10, 5, 0);
+                rightWall.rotation.y = -Math.PI / 2; 
+                rightWall.receiveShadow = true; // <--- Catch shadows!
+                scene.add(rightWall);
+                // ==========================================
+
+
+                
+                
+                // (You can load as many fake gold keys as you want, just don't 
+                // assign them to window.correctKey, and the click script will ignore them!)
+
+                // 2. THE LARGE FURNITURE (Floor Level)
+                // loadProp(path, x, y, z, scale, rotation)
+                loadProp('cabinet.glb', 7, 0, 6, 3.0, (3*Math.PI/4 + Math.PI/2));
+                loadProp('clock.glb', -7.8, 5, -8, 0.0075, Math.PI / 2);
+                loadProp('table.glb', 0, 0, -6, 2.0, 0);
+                loadProp('trunk.glb', 4, 0, -4, 1.0, -0.2);
+                loadProp('chair.glb', 3, 0, -7, 0.18, (Math.PI - 2*Math.PI));
+                loadProp('globe.glb', -7, 0, 8, 3.6, Math.PI / 2);
+                loadProp('telescope.glb', 5, 2, 4, 0.018, Math.PI / 3);
+
+                // 3. THE MEDIUM CLUTTER (Stacked!)
+                loadProp('suitcase.glb', 4, 0.8, -4, 0.008, 1.5);     // On the trunk
+                loadProp('gramophone.glb', -3, 0, 4, 2.0, -(Math.PI)); // On the chair
+                loadProp('lamp.glb', -4.5, 0, -5, 0.8, 0);          // By the chair
+
+                // 4. THE TINY DETAILS (On the table)
+                loadProp('potion.glb', 3, 1.2, -9, 0.001, 0);
+                loadProp('book.glb', 4, -4, 4.6, 0.4, -0.2);
+                loadProp('key.glb', 0, 0, 6.2, 7, 0.8);       // On the book
+                loadProp('hat.glb', -5, 1.28, 4, 4, 0);              // On the floor
+
+               // ==========================================
+                // 1. THE CLICKABLE SCROLL (Hitbox Upgraded)
+                // ==========================================
+                window.magicalScroll = new THREE.Group();
+                
+                // 1. The Critical Tags
+                window.magicalScroll.name = "Room1_Scroll"; 
+                interactableObjects.push(window.magicalScroll); // Pushed to the master list!
+                
+                window.magicalScroll.position.set(-4, 1, -5.2); 
+                window.magicalScroll.rotation.y = Math.PI/2;
+                scene.add(window.magicalScroll);
+
+                // 2. THE INVISIBLE HITBOX
+                // This creates a 1.5-meter invisible bubble around the scroll.
+                // If the crosshair touches the bubble, it counts as a click!
+                const hitBoxGeo = new THREE.SphereGeometry(1.5, 16, 16); 
+                const hitBoxMat = new THREE.MeshBasicMaterial({ visible: false }); // Completely invisible
+                const scrollHitBox = new THREE.Mesh(hitBoxGeo, hitBoxMat);
+                window.magicalScroll.add(scrollHitBox);
+
+                // 3. Load the actual visual model
+                gltfLoader.load('scroll.glb', (gltf) => {
+                    const scrollModel = gltf.scene;
+                    scrollModel.scale.set(0.1, 0.1, 0.1); 
+                    window.magicalScroll.add(scrollModel);
+                }, undefined, (error) => {
+                    console.error("Warning: scroll.glb failed to load!", error);
+                });
+
+               // ==========================================
+                // THE CORE MEMORY (Stealth / Sequential Puzzle)
+                // ==========================================
+                window.coreMemoryDiary = new THREE.Group();
+                window.coreMemoryDiary.name = "Room1_Diary"; 
+                // REMOVED from interactableObjects so she can't click it early!
+
+                const bookGeo = new THREE.BoxGeometry(0.6, 1.0, 0.1); 
+                const coverTexture = new THREE.TextureLoader().load('diary_cover.jpg');
+                
+                // 1. THE CAMOUFLAGE: Darken the materials so it blends into the shelf/floor
+                const coverMat = new THREE.MeshStandardMaterial({ 
+                    map: coverTexture, 
+                    roughness: 0.9, // Dusty and matte
+                    color: 0x444444 // Tints the photo dark grey/black
+                });
+                const paperMat = new THREE.MeshStandardMaterial({ 
+                    color: 0x333333, // Dark, aged pages instead of bright white
+                    roughness: 1.0 
+                }); 
+                
+                const bookMaterials = [paperMat, coverMat, paperMat, paperMat, coverMat, coverMat];
+                const customDiary = new THREE.Mesh(bookGeo, bookMaterials);
+                
+                customDiary.position.set(6.25, 2.4, 6.85); 
+                customDiary.rotation.set(0, -Math.PI / 6, 0); 
+                window.coreMemoryDiary.add(customDiary);
+
+                // 2. THE MAGICAL GLOW (Starts turned OFF)
+                // Notice the second number is 0 (Intensity)
+                window.diaryLight = new THREE.PointLight(0x4444ff, 0, 3); 
+                window.diaryLight.position.set(0, 0.5, 0.5); 
+                window.coreMemoryDiary.add(window.diaryLight);
+
+                const diaryHitBoxGeo = new THREE.SphereGeometry(1.0, 16, 16);
+                const diaryHitBoxMat = new THREE.MeshBasicMaterial({ visible: false }); 
+                const diaryHitBox = new THREE.Mesh(diaryHitBoxGeo, diaryHitBoxMat);
+                window.coreMemoryDiary.add(diaryHitBox);
+
+                // 3. INVISIBILITY CLOAK
+                window.coreMemoryDiary.visible = false; 
+                scene.add(window.coreMemoryDiary);
+
+                // ==========================================
+                // 1.8 THE CORRECT IRON KEY (Hitbox Upgraded)
+                // ==========================================
+                window.correctKey = new THREE.Group();
+                window.correctKey.name = "Room1_IronKey"; 
+                interactableObjects.push(window.correctKey); // Master list!
+                
+                window.correctKey.position.set(4, 0.2, -6); 
+                window.correctKey.rotation.y = Math.PI / 4; 
+                scene.add(window.correctKey);
+
+                // --- THE INVISIBLE HITBOX ---
+                // Radius of 1.0 is wide enough to click easily, but small enough not to overlap fakes
+                const keyHitBoxGeo = new THREE.SphereGeometry(1.0, 16, 16);
+                const keyhitBoxMat = new THREE.MeshBasicMaterial({ visible: false }); 
+                const ironHitBox = new THREE.Mesh(keyHitBoxGeo, keyhitBoxMat);
+                window.correctKey.add(ironHitBox);
+
+                // Load the 3D model
+                gltfLoader.load('key.glb', (gltf) => {
+                    const ironModel = gltf.scene;
+                    ironModel.scale.set(1.5, 1.5, 1.5);
+                    ironModel.traverse((child) => {
+                        if (child.isMesh) {
+                            child.material = new THREE.MeshStandardMaterial({
+                                color: 0x333333, metalness: 0.8, roughness: 0.7
+                            });
+                        }
+                    });
+                    window.correctKey.add(ironModel);
+                });
+
+               // ==========================================
+                // 1.9 THE GOLDEN DECOYS (Hitbox Upgraded)
+                // ==========================================
+                gltfLoader.load('key.glb', (gltf) => {
+                    const baseKeyModel = gltf.scene;
+
+                    // We reuse the exact same geometry to save computer memory!
+                    const fakeHitBoxGeo = new THREE.SphereGeometry(1.0, 16, 16);
+                    const fakeHitBoxMat = new THREE.MeshBasicMaterial({ visible: false });
+
+                    for (let i = 0; i < 15; i++) {
+                        const fakeKeyGroup = new THREE.Group();
+                        fakeKeyGroup.name = "Room1_FakeKey"; 
+                        interactableObjects.push(fakeKeyGroup); // Master list!
+
+                        // --- ADD THE INVISIBLE HITBOX ---
+                        const decoyHitBox = new THREE.Mesh(fakeHitBoxGeo, fakeHitBoxMat);
+                        fakeKeyGroup.add(decoyHitBox);
+
+                        const clone = baseKeyModel.clone();
+                        clone.scale.set(1.5, 1.5, 1.5);
+                        clone.traverse((child) => {
+                            if (child.isMesh) {
+                                child.material = new THREE.MeshStandardMaterial({
+                                    color: 0xffcc00, metalness: 1.0, roughness: 0.2
+                                });
+                            }
+                        });
+                        fakeKeyGroup.add(clone);
+
+                        const randomX = (Math.random() - 0.5) * 30;
+                        const randomZ = (Math.random() - 0.5) * 30;
+                        
+                        fakeKeyGroup.position.set(randomX, 0.2, randomZ);
+                        fakeKeyGroup.rotation.y = Math.random() * Math.PI; 
+                        
+                        scene.add(fakeKeyGroup);
+                    }
+                });
+
+                // ==========================================
+                // 1.7 THE ENCHANTED NIGHT SKY (Window Beam)
+                // ==========================================
+                // 1. Build the Moon
+                const moonGeo = new THREE.SphereGeometry(4, 32, 32);
+                const moonMat = new THREE.MeshStandardMaterial({
+                    color: 0xffffff, 
+                    emissive: 0xffffff, 
+                    emissiveIntensity: 2.0, 
+                    fog: false 
+                });
+                const moon = new THREE.Mesh(moonGeo, moonMat);
+                
+                // Move the moon diagonally into the deep background
+                moon.position.set(-30, 50, -30); 
+                scene.add(moon);
+
+                // 2. The "Window" Shaft of Light (SpotLight)
+                const moonLight = new THREE.SpotLight(0x88aaff, 20, 75); // High intensity blue light!
+                
+                // Position it high up and to the side, peering over/through the walls
+                moonLight.position.set(-15, 18, -15); 
+                
+                // Shape the beam! 
+                moonLight.angle = Math.PI / 40; // Makes the beam very narrow (like a window)
+                moonLight.penumbra = 0.1; // Softens the edges of the beam so it looks misty
+                moonLight.castShadow = true;
+                
+                // Aim the shaft of light directly at the floating scroll
+                moonLight.target.position.set(-5,1,-6.2);
+                scene.add(moonLight);
+                scene.add(moonLight.target); 
+
+              
+
+                // 2. Build the High-Altitude Clouds
+                // We are reusing the 'smokeTexture' canvas you built earlier!
+                const cloudGeo = new THREE.BufferGeometry();
+                const cloudCount = 150; 
+                const cloudPos = new Float32Array(cloudCount * 3);
+
+                for(let i = 0; i < cloudCount * 3; i += 3) {
+                    // Spread them massively across the sky
+                    cloudPos[i] = (Math.random() - 0.5) * 200;      // X (Left/Right)
+                    cloudPos[i+1] = 40 + (Math.random() * 30);      // Y (Height: Keep them above the walls)
+                    cloudPos[i+2] = -40 - (Math.random() * 100);    // Z (Depth: Push them deep into the background)
+                }
+
+                cloudGeo.setAttribute('position', new THREE.BufferAttribute(cloudPos, 3));
+                
+                const cloudMat = new THREE.PointsMaterial({
+                    size: 40.0, // Absolutely massive particles to look like distant clouds
+                    map: smokeTexture, // Reusing your procedural fog trick!
+                    color: 0x111122, // Deep, dark midnight blue
+                    transparent: true,
+                    opacity: 0.3, // Soft and ghost-like
+                    depthWrite: false, 
+                    blending: THREE.AdditiveBlending 
+                });
+
+                // Save to window so we can animate the wind
+                window.nightClouds = new THREE.Points(cloudGeo, cloudMat);
+                scene.add(window.nightClouds);
+                // ==========================================
+
+                document.getElementById('instructions').innerHTML = "Click screen to look. WASD to move.<br/><em>'Seek the core memory hidden in the dust...'</em>";
             }
         }
 
@@ -613,72 +1015,118 @@
         let isCasting = false;
         let castAnimationTimer = 0;
 
+        
+
         function onMouseClick() {
             if (!controls.isLocked) return;
 
             // FIX 1: Always shoot exactly from the center crosshair!
             const centerCrosshair = new THREE.Vector2(0, 0);
 
-            // ==========================================
-            // IF HOLDING WAND: EVERY CLICK IS A SPELL
+           
+            // IF HOLDING WAND: EVERY CLICK IS A SPELL OR PUZZLE
             // ==========================================
             if (activeWand) {
-                // Only cast if the previous animation is finished
+                // If reading a clue, clicking just closes it, it doesn't cast a spell!
+                if (document.getElementById('ui-container').style.display === 'block') {
+                    document.getElementById('ui-container').style.display = 'none';
+                    return; 
+                }
+
                 if (!isCasting) {
                     isCasting = true;
                     castAnimationTimer = 0; 
 
                     raycaster.setFromCamera(centerCrosshair, camera);
-                    const intersects = raycaster.intersectObjects(interactableObjects);
+                    // ADDED 'true' HERE SO IT CAN CLICK INSIDE GROUPS
+                    const intersects = raycaster.intersectObjects(interactableObjects, true);
 
                     if (intersects.length > 0) {
-                        const hitObject = intersects[0].object;
+                        let hitObject = intersects[0].object;
 
-                        // SCENARIO A: SHE SHOT THE ORB
+                        // CLIMB THE TREE TO FIND NAMES (For Room 1 Puzzles)
+                        let objectName = ""; 
+                        let currentObj = hitObject;
+                        while(currentObj) {
+                            if (currentObj.name) {
+                                objectName = currentObj.name;
+                                break; 
+                            }
+                            currentObj = currentObj.parent;
+                        }
+
+                        // --- ROOM 1 PUZZLE LOGIC ---
+                        if (objectName === "Room1_Scroll") {
+                            showUI("The Ancient Parchment", "I have teeth but cannot chew,\nI hold a secret meant for you.\nAmong the fakes of shining gold,\nSeek the iron, dark and cold.");
+                            document.exitPointerLock(); // Free the mouse to click Close
+                            return;
+                        } else if (objectName === "Room1_IronKey") {
+                            showUI("The Iron Key Turns...", "A heavy mechanical click echoes through the dark.\nA whisper slithers into your mind...\n\n'Seek the blank pages... a memory preserved in ink.\nFind the diary.'");
+                            
+                            // --- THE REVEAL MAGIC ---
+                            if (window.coreMemoryDiary && window.coreMemoryDiary.visible === false) {
+                                // 1. Break the invisibility cloak
+                                window.coreMemoryDiary.visible = true;
+                                
+                                // 2. Turn on the faint blue glow
+                                window.diaryLight.intensity = 0.8;
+                                
+                                // 3. Push it into the active laser list so she can finally click it!
+                                interactableObjects.push(window.coreMemoryDiary);
+                            }
+
+                            document.exitPointerLock();
+                            return;
+                        
+                        } else if (objectName === "Room1_FakeKey") {
+                            showUI("A Useless Trinket", "It is heavy and made of solid gold, but it doesn't feel right. This is just a distraction.");
+                            document.exitPointerLock();
+                            return;
+                        }
+                        // ---> NEW DIARY LOGIC <---
+                        // ---> THE NEW WINNING LOGIC <---
+                        else if (objectName === "Room1_Diary") {
+                            // 1. Unlock the mouse
+                            document.exitPointerLock(); 
+                            
+                            // 2. Grab your existing transition screen
+                            const transitionScreen = document.getElementById('transition-overlay');
+                            
+                            // 3. Dynamically change the text for Room 1
+                            transitionScreen.querySelector('h2').innerText = "Core Memory Found";
+                            transitionScreen.querySelector('p').innerText = "All right, you have won! Feel free to go to the next room.";
+                            
+                            // 4. Show the victory screen!
+                            transitionScreen.style.display = 'block';
+                            return;
+                        }
+
+                        // --- ROOM 0 SPELL LOGIC ---
                         if (hitObject.userData.isOrb) {
                             document.getElementById('instructions').innerHTML = "<em>You caught it! Turn around and find the protruding brick.</em>";
-                            
                             scene.remove(hitObject);
                             window.patronusOrb = null;
-                            
-                            // Make the stealth brick shootable now!
                             interactableObjects = [window.secretBrick]; 
 
-                        // SCENARIO B: SHE SHOT THE STEALTH BRICK
                         } else if (hitObject.userData.isFaultyBrick) {
                             document.getElementById('instructions').innerHTML = "<em>A magical hum echoes... turn around!</em>";
-                            
-                            // Spawn the glowing riddle on the opposite wall
                             if (!window.wallWriting) {
-                                // SANKET: Put your custom question/riddle here!
                                 window.wallWriting = window.createWallWriting("Umm... Since this is the first question, I will let you off the hook... , Soooo.... When did this chapter began...?? , (answer in dd-mm-yyyy)");
                                 window.wallWriting.userData = { isRiddle: true };
                                 scene.add(window.wallWriting);
                             }
-                            
-                            // Make only the glowing text clickable now
                             interactableObjects = [window.wallWriting];
 
-                       // SCENARIO C: SHE CLICKED THE GLOWING TEXT
                         } else if (hitObject.userData.isRiddle) {
-                            
-                            // 1. Tell the browser to unlock the mouse
                             document.exitPointerLock(); 
-                            
-                            // 2. Show the typing UI
                             document.getElementById('password-overlay').style.display = 'block';
-                            
-                            // 3. Wait 100ms for the unlock to finish, THEN force the typing cursor
-                            setTimeout(() => {
-                                document.getElementById('magic-password').focus(); 
-                            }, 100);
+                            setTimeout(() => { document.getElementById('magic-password').focus(); }, 100);
                         }
                     } else {
-                        // SCENARIO D: SHE MISSED
                         document.getElementById('instructions').innerHTML = "<em>Sparks fly! Keep looking...</em>";
                     }
                 }
-                return; // Stop running code here
+                return; 
             }
 
             // ==========================================
@@ -856,6 +1304,35 @@
                 }
             }
 
+              // --- INSIDE YOUR animate() FUNCTION ---
+              if (window.movingSmoke) {
+              // Slowly drift the entire fog bank in a circle
+               window.movingSmoke.rotation.y += 0.0005; 
+          
+              // Make the smoke "breathe" up and down using a sine wave
+              window.movingSmoke.position.y = Math.sin(Date.now() * 0.0005) * 0.5; 
+             }
+
+             // --- INSIDE YOUR animate() FUNCTION ---
+    if (window.movingSmoke) {
+        window.movingSmoke.rotation.y += 0.0005; 
+        window.movingSmoke.position.y = Math.sin(Date.now() * 0.0005) * 0.5; 
+    }
+
+    // --- INSIDE YOUR animate() FUNCTION ---
+    if (window.movingSmoke) {
+        window.movingSmoke.rotation.y += 0.0005; 
+        window.movingSmoke.position.y = Math.sin(Date.now() * 0.0005) * 0.5; 
+    }
+
+    // --- INSIDE YOUR animate() FUNCTION ---
+
+    // --- ADD THE HIGH-ALTITUDE WIND ---
+    if (window.nightClouds) {
+        // Rotates the entire sky dome extremely slowly
+        window.nightClouds.rotation.y += 0.0001; 
+    }
+
             // 4. Render the Screen
             if (renderer && scene && camera) {
                 renderer.render(scene, camera);
@@ -926,17 +1403,10 @@
                 // SUCCESS! 
                 document.getElementById('password-overlay').style.display = 'none';
                 
-                // Teleport
-                if (typeof camera !== 'undefined') camera.clear(); 
-                activeWand = null; 
-                currentRoom++;
-                if (currentRoom > 1) {
-                    alert("You finished the game! Happy Birthday!");
-                } else {
-                    document.body.requestPointerLock(); 
-                    loadRoom(currentRoom);
-                }
-                } else {
+                // Show the transition message!
+                document.getElementById('transition-overlay').style.display = 'block';
+                
+            } else {
                 // FAILED!
                 document.getElementById('instructions').innerHTML = "<em style='color: red;'>The magic fizzles. Incorrect password!</em>";
                 
@@ -960,14 +1430,52 @@
             event.stopPropagation();
         });
 
+// ==========================================
+        // TELEPORT TO ROOM 1 (ROOM OF REQUIREMENT)
+        // ==========================================
+        document.getElementById('next-room-btn').addEventListener('click', () => {
+            
+            // --- THE NUCLEAR UI CLEANUP ---
+            const letter = document.getElementById('letter-overlay');
+            if (letter) {
+                letter.style.display = 'none';
+            }
+            
+            // Force the transition message and password box to hide
+            document.getElementById('transition-overlay').style.display = 'none';
+            document.getElementById('password-overlay').style.display = 'none';
+            
+            // --- TELEPORTATION LOGIC ---
+            // Vaporize all 3D objects from Room 0 (like the glowing text)
+            while(scene.children.length > 0){ 
+                scene.remove(scene.children[0]); 
+            }
+            
+            if (typeof camera !== 'undefined') camera.clear(); 
+            activeWand = null; 
+            currentRoom++;
+            
+            if (currentRoom > 1) {
+                alert("You finished the game! Happy Birthday!");
+            } else {
+                // Lock the mouse back in and load the new room!
+                document.body.requestPointerLock(); 
+                loadRoom(currentRoom);
+            }
+        });
+
         // ==========================================
         // THE MAGICAL ECHO (Visual Feedback for Typing)
         // ==========================================
-        document.getElementById('magic-password').addEventListener('input', (event) => {
-            // Every time a key is pressed, mirror it to the giant glowing text!
-            document.getElementById('magic-echo').innerText = event.target.value;
-        });
+        const magicPasswordInput = document.getElementById('magic-password');
+        if (magicPasswordInput) {
+            magicPasswordInput.addEventListener('input', (event) => {
+                const echo = document.getElementById('magic-echo');
+                if (echo) echo.innerText = event.target.value;
+            });
+        }
 
+        
        
     </script>
    
