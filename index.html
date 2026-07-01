@@ -152,6 +152,7 @@
         let interactableObjects = []; // Objects the user can click
         let currentRoom = 0; // 0 = HP, 1 = K-Pop
         const gltfLoader = new THREE.GLTFLoader();
+        
 
         // Movement state
         const moveState = { forward: false, backward: false, left: false, right: false };
@@ -421,29 +422,74 @@ function showUI(title, text) {
                 centerLight.position.set(0, 3, -5);
                 scene.add(centerLight);
 
-                // 2. REALISTIC CASTLE WALLS (Using your image)
+                // ==========================================
+                // 2. REALISTIC CASTLE WALLS (PBR UPGRADE)
+                // ==========================================
                 const textureLoader = new THREE.TextureLoader();
-                const wallTexture = textureLoader.load('./stone.jpg'); // Loads your downloaded image
-                
-                // Make the image repeat like wallpaper so it doesn't stretch
-                wallTexture.wrapS = THREE.RepeatWrapping;
-                wallTexture.wrapT = THREE.RepeatWrapping;
-                wallTexture.repeat.set(4, 2); 
 
-                const castleMaterial = new THREE.MeshStandardMaterial({ 
-                    map: wallTexture, 
-                    roughness: 0.9, 
-                    metalness: 0.1 
+                // Load your three new PBR files
+                const colorMap = textureLoader.load('Color0.jpg');
+                const normalMap = textureLoader.load('Normal0.jpg');
+                const roughnessMap = textureLoader.load('Roughness.jpg');
+
+                // Make all three images repeat like wallpaper
+                [colorMap, normalMap, roughnessMap].forEach(map => {
+                    map.wrapS = THREE.RepeatWrapping;
+                    map.wrapT = THREE.RepeatWrapping;
+                    map.repeat.set(4, 2); // Keeping your original scale!
                 });
-                buildRoomGeometry(floorGeo, wallGeo, castleMaterial);
+
+                // Create the High-Definition Material
+                // Create the High-Definition Material
+                const pbrWallMaterial = new THREE.MeshStandardMaterial({
+                    map: colorMap,
+                    normalMap: normalMap,
+                    
+                    // ---> THE MAGIC LINE <---
+                    // Default is (1, 1). Crank this to 2, 3, or even 5 for deep grooves!
+                    normalScale: new THREE.Vector2(2, 4), 
+                    
+                    roughnessMap: roughnessMap
+                });
+
+                
+
+
+                // ==========================================
+                // 3. REALISTIC DUNGEON FLOOR
+                // ==========================================
+                // Load your three new floor files
+                const floorColor = textureLoader.load('floorColor.jpg');
+                const floorNormal = textureLoader.load('floorNormal.jpg');
+                const floorRough = textureLoader.load('floorRoughness.jpg');
+
+                // Make the floor tile repeatedly (8x8 usually looks great for floors)
+                [floorColor, floorNormal, floorRough].forEach(map => {
+                    map.wrapS = THREE.RepeatWrapping;
+                    map.wrapT = THREE.RepeatWrapping;
+                    map.repeat.set(8, 8); 
+                });
+
+                // Create the High-Definition Floor Material
+                const pbrFloorMaterial = new THREE.MeshStandardMaterial({
+                    map: floorColor,
+                    normalMap: floorNormal,
+                    normalScale: new THREE.Vector2(2, 2), // Gives the floor depth!
+                    roughnessMap: floorRough
+                });
+
+                // Feed the new 3D material into your existing helper function!
+                // Build the room with both high-definition materials!
+                buildRoomGeometry(floorGeo, wallGeo, pbrWallMaterial, pbrFloorMaterial);
 
 // --- 1. THE STEALTH BRICK ---
                 // We use BoxGeometry so it physically sticks out of the wall
                 const brickGeo = new THREE.BoxGeometry(1.5, 0.5, 0.2); 
                 const brickMat = new THREE.MeshStandardMaterial({ 
-                    map: wallTexture, // Use the EXACT same texture so it blends perfectly!
-                    roughness: 0.9 
-                });
+                map: colorMap, 
+                normalMap: normalMap, 
+                roughnessMap: roughnessMap 
+               });
                 
                 const faultyBrick = new THREE.Mesh(brickGeo, brickMat);
                 // Hide it down in the dark bottom-left corner of the room
@@ -639,33 +685,46 @@ function showUI(title, text) {
 
                 
 
-                // ==========================================
-                // ==========================================
                // ==========================================
-                // 1.5 THE ROOM STRUCTURE (Floor)
+                // 1.5 & 1.6 THE ROOM STRUCTURE (Floor & Walls)
                 // ==========================================
                 const textureLoader = new THREE.TextureLoader();
-                const floorTexture = textureLoader.load('floor.jpg'); 
-                
-                floorTexture.wrapS = THREE.RepeatWrapping;
-                floorTexture.wrapT = THREE.RepeatWrapping;
-                floorTexture.repeat.set(3, 3); 
 
-                const floorMaterial = new THREE.MeshStandardMaterial({
-                    map: floorTexture,
-                    // THE MAGIC TRICK: Tint the texture a deep, dark reddish-brown!
-                    color: new THREE.Color(0x4a2511), // Try 0x5e2b17 for cherry, or 0x3d1a0a for dark mahogany
-                    roughness: 0.8, 
+                // --- STEP 1: LOAD ROOM 1 FLOOR TEXTURES ---
+                // Replace these with your new Room 1 image filenames!
+                const room1FloorColor = textureLoader.load('Room1_FloorColor.jpg');
+                const room1FloorNormal = textureLoader.load('Room1_FloorNormal.jpg');
+                const room1FloorRough = textureLoader.load('Room1_FloorRoughness.jpg');
+
+                // Make the floor tile repeatedly
+                [room1FloorColor, room1FloorNormal, room1FloorRough].forEach(map => {
+                    map.wrapS = map.wrapT = THREE.RepeatWrapping;
+                    map.repeat.set(4, 4); // Adjust this if the tiles look too big or small!
                 });
 
-                const floorGeo = new THREE.PlaneGeometry(20, 20); 
-                const floor = new THREE.Mesh(floorGeo, floorMaterial);
-                floor.rotation.x = -Math.PI / 2; 
-                floor.position.y = -0.01; 
-                scene.add(floor);
-                // ==========================================
-                // 1.6 THE ROOM STRUCTURE (Walls)
-                // ==========================================
+                // --- STEP 2: CREATE ROOM 1 FLOOR MATERIAL ---
+                const room1FloorMaterial = new THREE.MeshStandardMaterial({
+                    map: room1FloorColor,
+                    normalMap: room1FloorNormal,
+                    roughnessMap: room1FloorRough,
+                    normalScale: new THREE.Vector2(2.0, 2.0) // Deep shadows for the floor
+                });
+
+                // --- STEP 3: BUILD ROOM 1 FLOOR GEOMETRY ---
+                const floorGeo = new THREE.PlaneGeometry(20, 20); // Matches your 20x20 room size
+                const room1Floor = new THREE.Mesh(floorGeo, room1FloorMaterial);
+                
+                room1Floor.rotation.x = -Math.PI / 2; // Lay it flat
+                room1Floor.position.y = -0.01; // Keep it just below the zero-line to prevent glitching
+                room1Floor.receiveShadow = true; // Let it catch shadows from your furniture
+                
+                scene.add(room1Floor);
+
+                // --- STEP 1: LOAD ALL TEXTURES FIRST ---
+                
+                
+                
+                // Load Wall Textures
                 const colorMap = textureLoader.load('Color.jpg'); 
                 const normalMap = textureLoader.load('Normal.jpg'); 
                 const roughMap = textureLoader.load('Roughness.jpg'); 
@@ -678,43 +737,53 @@ function showUI(title, text) {
                 normalMap.repeat.set(4, 2); 
                 roughMap.repeat.set(4, 2); 
 
+                // --- STEP 2: CREATE ALL MATERIALS SECOND ---
+                
+               
+
+                // Build Wall Material
                 const wallMaterial = new THREE.MeshStandardMaterial({
                     map: colorMap,
                     normalMap: normalMap, 
-                    roughnessMap: roughMap,
+                    roughnessMap: roughMap, // Name perfectly matches the loaded map!
                     normalScale: new THREE.Vector2(2.0, 2.0) 
                 });
 
+                // --- STEP 3: BUILD THE ARCHITECTURE LAST ---
+                
+                
+                
                 const wallGeo = new THREE.PlaneGeometry(20, 10);
 
-                // 1. BACK WALL
+                // 2. BACK WALL
                 const backWall = new THREE.Mesh(wallGeo, wallMaterial);
                 backWall.position.set(0, 5, -10); 
-                backWall.receiveShadow = true; // <--- Catch shadows!
+                backWall.receiveShadow = true; 
                 scene.add(backWall);
 
-                // 2. FRONT WALL
+                // 3. FRONT WALL
                 const frontWall = new THREE.Mesh(wallGeo, wallMaterial);
                 frontWall.position.set(0, 5, 10);
                 frontWall.rotation.y = Math.PI; 
-                frontWall.receiveShadow = true; // <--- Catch shadows!
+                frontWall.receiveShadow = true; 
                 scene.add(frontWall);
 
-                // 3. LEFT WALL
+                // 4. LEFT WALL
                 const leftWall = new THREE.Mesh(wallGeo, wallMaterial);
                 leftWall.position.set(-10, 5, 0);
                 leftWall.rotation.y = Math.PI / 2; 
-                leftWall.receiveShadow = true; // <--- Catch shadows!
+                leftWall.receiveShadow = true; 
                 scene.add(leftWall);
 
-                // 4. RIGHT WALL
+                // 5. RIGHT WALL
                 const rightWall = new THREE.Mesh(wallGeo, wallMaterial);
                 rightWall.position.set(10, 5, 0);
                 rightWall.rotation.y = -Math.PI / 2; 
-                rightWall.receiveShadow = true; // <--- Catch shadows!
+                rightWall.receiveShadow = true; 
                 scene.add(rightWall);
                 // ==========================================
 
+                // ==========================================
 
                 
                 
@@ -890,36 +959,55 @@ function showUI(title, text) {
                 // ==========================================
                 // 1.7 THE ENCHANTED NIGHT SKY (Window Beam)
                 // ==========================================
-                // 1. Build the Moon
-                const moonGeo = new THREE.SphereGeometry(4, 32, 32);
-                const moonMat = new THREE.MeshStandardMaterial({
-                    color: 0xffffff, 
-                    emissive: 0xffffff, 
-                    emissiveIntensity: 2.0, 
-                    fog: false 
+              // ==========================================
+                // THE FINAL GLOWING MOON (.GLB VERSION)
+                // ==========================================
+                
+                
+                gltfLoader.load('moon.glb', (gltf) => {
+                    const moonModel = gltf.scene;
+
+                    // 1. THE HIJACK: OVERWRITE THE BROKEN MATERIAL
+    
+                    // 1. IMPROVED GLOWING MOON (Texture Heist + Fog Immunity)
+                    moonModel.traverse((child) => {
+                        if (child.isMesh) {
+                            const oldMat = Array.isArray(child.material) ? child.material[0] : child.material;
+                            child.material = new THREE.MeshStandardMaterial({
+                                map: oldMat.map,
+                                emissive: new THREE.Color(0xffffee),
+                                emissiveMap: oldMat.map,
+                                emissiveIntensity: 2.0, // High intensity for moon surface glow
+                                fog: false // Ignore room fog
+                            });
+                        }
+                    });
+
+                     // 2. POSITION THE MOON
+                    moonModel.position.set(-10, 20, -10); 
+                    // (If you changed the scale earlier to make it fit the red box, add that line here!)
+                    scene.add(moonModel);
+
+                    // 2. THE "NO-RING" HALO
+                    const haloGeo = new THREE.SphereGeometry(1.8, 32, 32); 
+                    const haloMat = new THREE.MeshBasicMaterial({
+                        color: 0xffffee,
+                        transparent: true,
+                        opacity: 0.08, // Subtle opacity
+                        blending: THREE.NormalBlending, // Changed from Additive to fix the "Ring"
+                        side: THREE.BackSide,
+                        depthWrite: false,
+                        fog: false // Ignore room fog
+                    });
+                    const halo = new THREE.Mesh(haloGeo, haloMat);
+                    moonModel.add(halo);
+
+                    // 3. LOW-IMPACT LIGHTING
+                    // Instead of a PointLight with range 100, use a very small range (e.g., 5)
+                    // This lights the area immediately around the moon but leaves the room dark.
+                    const moonLight = new THREE.PointLight(0xffffee, 1.0, 5); 
+                    moonModel.add(moonLight);
                 });
-                const moon = new THREE.Mesh(moonGeo, moonMat);
-                
-                // Move the moon diagonally into the deep background
-                moon.position.set(-30, 50, -30); 
-                scene.add(moon);
-
-                // 2. The "Window" Shaft of Light (SpotLight)
-                const moonLight = new THREE.SpotLight(0x88aaff, 20, 75); // High intensity blue light!
-                
-                // Position it high up and to the side, peering over/through the walls
-                moonLight.position.set(-15, 18, -15); 
-                
-                // Shape the beam! 
-                moonLight.angle = Math.PI / 40; // Makes the beam very narrow (like a window)
-                moonLight.penumbra = 0.1; // Softens the edges of the beam so it looks misty
-                moonLight.castShadow = true;
-                
-                // Aim the shaft of light directly at the floating scroll
-                moonLight.target.position.set(-5,1,-6.2);
-                scene.add(moonLight);
-                scene.add(moonLight.target); 
-
               
 
                 // 2. Build the High-Altitude Clouds
@@ -956,26 +1044,34 @@ function showUI(title, text) {
             }
         }
 
-        function buildRoomGeometry(floorGeo, wallGeo, material) {
-            const floor = new THREE.Mesh(floorGeo, material);
+       // THE ARCHITECTURE HELPER FUNCTION (Corrected Parameters!)
+        function buildRoomGeometry(floorGeo, wallGeo, wallMat, floorMat) {
+            
+            // Apply the Floor Material
+            const floor = new THREE.Mesh(floorGeo, floorMat);
             floor.rotation.x = -Math.PI / 2;
-            scene.add(floor);
+            scene.add(floor); 
 
-            const wallFront = new THREE.Mesh(wallGeo, material);
+            // Apply the Wall Material (Using your original 20x20 room coordinates)
+            const northWall = new THREE.Mesh(wallGeo, wallMat);
+            northWall.position.set(0, 10, -20);
+            scene.add(northWall);
+
+            const wallFront = new THREE.Mesh(wallGeo, wallMat);
             wallFront.position.set(0, 5, -10);
             scene.add(wallFront);
 
-            const wallBack = new THREE.Mesh(wallGeo, material);
+            const wallBack = new THREE.Mesh(wallGeo, wallMat);
             wallBack.position.set(0, 5, 10);
             wallBack.rotation.y = Math.PI;
             scene.add(wallBack);
 
-            const wallLeft = new THREE.Mesh(wallGeo, material);
+            const wallLeft = new THREE.Mesh(wallGeo, wallMat);
             wallLeft.position.set(-10, 5, 0);
             wallLeft.rotation.y = Math.PI / 2;
             scene.add(wallLeft);
 
-            const wallRight = new THREE.Mesh(wallGeo, material);
+            const wallRight = new THREE.Mesh(wallGeo, wallMat);
             wallRight.position.set(10, 5, 0);
             wallRight.rotation.y = -Math.PI / 2;
             scene.add(wallRight);
